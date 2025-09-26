@@ -48,8 +48,8 @@
     }
   },
   "escalation": {
-    "enabled": false,
-    "after_attempts": 4,
+    "enabled": true,
+    "after_attempts": 1,
     "min_confidence": 0.82,
     "reasoning_type": "deductive",
     "trigger_reasons": [

@@ -2382,3 +2382,5 @@ if not hasattr(ReasoningChain, "escalation_collaboration_policy"):
     except Exception:
         pass
 
+from ._collaboration_patch import enable_collab_patch as _paca_enable_collab_patch
+_paca_enable_collab_patch(ReasoningChain)
