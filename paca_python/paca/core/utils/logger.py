@@ -243,3 +243,69 @@ def setup_python_logging_bridge(namespace: str = 'python') -> None:
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.DEBUG)
+
+
+# ===== Compatibility wrapper for __main__.py =====
+# Some modules import `StructuredLogger` directly.
+# Provide a thin wrapper over PacaLogger to keep the public API stable.
+try:
+    from ..types.base import LogLevel  # already imported above; kept for clarity
+except Exception:
+    pass
+
+class StructuredLogger:
+    """
+    Thin wrapper around PacaLogger to match expected API.
+    - name: logger namespace
+    - log_level: "DEBUG" | "INFO" | "WARN" | "ERROR" (string)
+    Methods:
+      debug/info/warning/warn/error (sync)
+      error_async (awaitable), and `async def error(...)` for compatibility
+    """
+
+    _LEVEL_MAP = {
+        "DEBUG": LogLevel.DEBUG,
+        "INFO": LogLevel.INFO,
+        "WARN": LogLevel.WARN,
+        "WARNING": LogLevel.WARN,
+        "ERROR": LogLevel.ERROR,
+        "FATAL": LogLevel.FATAL,
+    }
+
+    def __init__(self, name: str = "PacaLogger", log_level: str = "INFO"):
+        level = self._LEVEL_MAP.get(str(log_level).upper(), LogLevel.INFO)
+        # Use existing logger implementation
+        self._inner = PacaLogger(namespace=name, min_level=level)
+
+    # level controls
+    def set_level(self, log_level: str) -> None:
+        level = self._LEVEL_MAP.get(str(log_level).upper(), LogLevel.INFO)
+        self._inner.min_level = level
+
+    # passthrough helpers
+    def debug(self, message: str, **meta) -> None:
+        self._inner.debug(message, meta or None)
+
+    def info(self, message: str, **meta) -> None:
+        self._inner.info(message, meta or None)
+
+    def warning(self, message: str, **meta) -> None:
+        self._inner.warn(message, meta or None)
+
+    # alias commonly used name
+    warn = warning
+
+    def error(self, message: str, **meta) -> None:
+        # keep sync path; some code may call without await
+        self._inner.error(message, None, meta or None)
+
+    async def error_async(self, message: str, **meta) -> None:
+        # allow `await logger.error_async(...)`
+        self._inner.error(message, None, meta or None)
+
+    # Some code may `await logger.error(...)`; support that too.
+    async def __call_error_async_compat(self, message: str, **meta) -> None:
+        self._inner.error(message, None, meta or None)
+    # expose the async-compatible name
+    async_error = error_async
+

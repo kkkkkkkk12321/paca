@@ -242,3 +242,12 @@
 {"session_id": "monitoring_be13fe92", "ended_at": "2025-09-26T07:30:36.100247+00:00", "quality": null, "quality_metrics": null, "complexity_score": 11, "alerts": []}
 {"session_id": "monitoring_dbab4c91", "ended_at": "2025-09-26T07:30:36.103576+00:00", "quality": null, "quality_metrics": null, "complexity_score": 4, "alerts": []}
 {"session_id": "monitoring_44c9b730", "ended_at": "2025-09-26T07:30:36.106756+00:00", "quality": null, "quality_metrics": null, "complexity_score": 3, "alerts": []}
+{"session_id": "monitoring_85186b15", "ended_at": "2025-09-26T09:25:49.448470+00:00", "quality": null, "quality_metrics": null, "complexity_score": 6, "alerts": []}
+{"session_id": "monitoring_ab588977", "ended_at": "2025-09-26T09:25:58.959105+00:00", "quality": null, "quality_metrics": null, "complexity_score": 3, "alerts": []}
+{"session_id": "monitoring_410eb917", "ended_at": "2025-09-26T09:26:05.874568+00:00", "quality": null, "quality_metrics": null, "complexity_score": 3, "alerts": []}
+{"session_id": "monitoring_4f4d4864", "ended_at": "2025-09-26T09:26:14.634635+00:00", "quality": null, "quality_metrics": null, "complexity_score": 3, "alerts": []}
+{"session_id": "monitoring_2f26cca5", "ended_at": "2025-09-26T09:38:46.902479+00:00", "quality": null, "quality_metrics": null, "complexity_score": 10, "alerts": []}
+{"session_id": "monitoring_871eb211", "ended_at": "2025-09-26T09:39:19.778676+00:00", "quality": null, "quality_metrics": null, "complexity_score": 4, "alerts": []}
+{"session_id": "monitoring_afa7fb83", "ended_at": "2025-09-26T09:43:08.939496+00:00", "quality": null, "quality_metrics": null, "complexity_score": 10, "alerts": []}
+{"session_id": "monitoring_81983432", "ended_at": "2025-09-26T09:43:23.899998+00:00", "quality": null, "quality_metrics": null, "complexity_score": 3, "alerts": []}
+{"session_id": "monitoring_fa6d8d46", "ended_at": "2025-09-26T09:43:32.076758+00:00", "quality": null, "quality_metrics": null, "complexity_score": 3, "alerts": []}

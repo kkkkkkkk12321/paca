@@ -9,6 +9,7 @@ import argparse
 import os
 from pathlib import Path
 from typing import Optional
+import paca.cognitive._enable_collab_patch
 
 # UTF-8 인코딩 설정 (Windows 호환성)
 if os.name == 'nt':  # Windows
@@ -98,7 +99,7 @@ Examples:
 async def run_interactive_mode(paca_system: PacaSystem):
     """대화형 모드 실행"""
     print("🤖 PACA v5 대화형 모드")
-    print("종료하려면 'quit', 'exit', 또는 Ctrl+C를 입력하세요.\n")
+    print("종료하려면 'quit', 'exit', 또는 Ctrl+C'를 입력하세요.\n")
 
     try:
         while True:
@@ -192,10 +193,45 @@ async def main_async():
         # 설정 생성
         config = PacaConfig()
 
+        # === 추가: 협업 재시도 정책 JSON 로드 ===
+        from paca.cognitive._collab_policy_loader import load_policy, apply_to_config
+        policy = load_policy()
+        apply_to_config(config, policy)
+        # =======================================
+
+        # === 추가: 현재 임계값들 디버그 프린트 ===
+        try:
+            print("[CFG] thresholds:",
+                  "reasoning=", getattr(config, "reasoning_confidence_threshold", None),
+                  "backtrack=", getattr(config, "backtrack_confidence_threshold", None),
+                  "switch=", getattr(config, "strategy_switch_confidence_threshold", None),
+                  "escal_min=", (getattr(config, "escalation", {}) or {}).get("min_confidence"))
+        except Exception:
+            pass
+        # =======================================
+
+        # === 추가: 임시 강제 완화(바로 효과 필요할 때) ===
+        # JSON이 제대로 반영되지 않는 환경을 대비한 안전 우회입니다.
+        # 나중에 JSON이 확실히 적용되는 걸 확인하면 아래 블록은 지워도 됩니다.
+        try:
+            setattr(config, "reasoning_confidence_threshold", 0.15)
+            setattr(config, "backtrack_confidence_threshold", 0.15)
+            setattr(config, "strategy_switch_confidence_threshold", 0.20)
+            if not hasattr(config, "policy"):
+                setattr(config, "policy", {})
+            config.policy["low_confidence_threshold"] = 0.15
+            if isinstance(getattr(config, "escalation", {}), dict):
+                config.escalation["min_confidence"] = 0.25
+        except Exception:
+            pass
+        # =======================================
+
         if args.debug:
             config.log_level = "DEBUG"
+            setattr(config, "debug", True)
         else:
             config.log_level = args.log_level
+            setattr(config, "debug", False)
 
         # GUI 모드
         if args.gui:
