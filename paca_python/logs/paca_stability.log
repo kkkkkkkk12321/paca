@@ -1,0 +1,39 @@
+2025-09-22 07:03:51,896 - paca.tools.tool_manager - INFO - 도구 'web_search' (search) 등록 완료
+2025-09-22 07:03:51,896 - paca.tools.tool_manager - INFO - 도구 'file_manager' (file) 등록 완료
+2025-09-22 07:03:51,896 - PACA_Stability - INFO - 안정성 강화 환경 설정 완료
+2025-09-22 07:03:51,896 - PACA_Stability - INFO - 안정성 테스트 시작: invalid_web_search
+2025-09-22 07:03:51,896 - paca.tools.tool_manager - ERROR - 도구 'web_search' 실행 오류: 도구 'web_search' 실행이 안전성 정책에 위배됩니다.
+2025-09-22 07:03:51,896 - paca.tools.tool_manager - ERROR - 도구 'web_search' 실행 오류: 도구 'web_search' 실행이 안전성 정책에 위배됩니다.
+2025-09-22 07:03:52,218 - paca.tools.tool_manager - INFO - 도구 'web_search' 실행 완료 (성공: True, 0.32초)
+2025-09-22 07:03:52,218 - paca.tools.tool_manager - ERROR - 도구 'web_search' 실행 오류: 도구 'web_search' 실행이 안전성 정책에 위배됩니다.
+2025-09-22 07:03:52,218 - paca.tools.tool_manager - ERROR - 도구 'web_search' 실행 오류: 도구 'web_search' 실행이 안전성 정책에 위배됩니다.
+2025-09-22 07:03:52,218 - paca.tools.tool_manager - ERROR - 도구 'web_search' 실행 오류: 도구 'web_search' 실행이 안전성 정책에 위배됩니다.
+2025-09-22 07:03:52,218 - PACA_Stability - INFO - 테스트 완료: invalid_web_search - 성공: True, 점수: 0.90
+2025-09-22 07:03:52,218 - PACA_Stability - INFO - 안정성 테스트 시작: file_permission_error
+2025-09-22 07:03:52,218 - paca.tools.tool_manager - ERROR - 도구 'file_manager' 실행 오류: 도구 'file_manager' 실행이 안전성 정책에 위배됩니다.
+2025-09-22 07:03:52,218 - PACA_Stability - INFO - 권한 에러 적절히 처리: /system/protected_file.txt
+2025-09-22 07:03:52,219 - paca.tools.tool_manager - INFO - 도구 'file_manager' 실행 완료 (성공: False, 0.00초)
+2025-09-22 07:03:52,219 - PACA_Stability - INFO - 권한 에러 적절히 처리: C:\Windows\System32\test.txt
+2025-09-22 07:03:52,219 - paca.tools.tool_manager - INFO - 도구 'file_manager' 실행 완료 (성공: False, 0.00초)
+2025-09-22 07:03:52,219 - PACA_Stability - INFO - 권한 에러 적절히 처리: /root/protected.txt
+2025-09-22 07:03:52,219 - PACA_Stability - INFO - 테스트 완료: file_permission_error - 성공: True, 점수: 0.80
+2025-09-22 07:03:52,219 - PACA_Stability - INFO - 안정성 테스트 시작: large_memory_operation
+2025-09-22 07:03:52,221 - paca.tools.tool_manager - INFO - 도구 'file_manager' 실행 완료 (성공: True, 0.00초)
+2025-09-22 07:03:52,261 - PACA_Stability - INFO - 테스트 완료: large_memory_operation - 성공: True, 점수: 0.80
+2025-09-22 07:03:52,261 - PACA_Stability - INFO - 안정성 테스트 시작: concurrent_operations
+2025-09-22 07:03:52,263 - paca.tools.tool_manager - INFO - 도구 'file_manager' 실행 완료 (성공: True, 0.00초)
+2025-09-22 07:03:52,264 - paca.tools.tool_manager - INFO - 도구 'file_manager' 실행 완료 (성공: True, 0.00초)
+2025-09-22 07:03:52,264 - paca.tools.tool_manager - INFO - 도구 'file_manager' 실행 완료 (성공: True, 0.00초)
+2025-09-22 07:03:52,517 - paca.tools.tool_manager - INFO - 도구 'web_search' 실행 완료 (성공: True, 0.26초)
+2025-09-22 07:03:52,518 - paca.tools.tool_manager - INFO - 도구 'web_search' 실행 완료 (성공: True, 0.26초)
+2025-09-22 07:03:52,523 - paca.tools.tool_manager - INFO - 도구 'web_search' 실행 완료 (성공: True, 0.26초)
+2025-09-22 07:03:52,523 - PACA_Stability - INFO - 테스트 완료: concurrent_operations - 성공: True, 점수: 1.00
+2025-09-22 07:03:52,523 - PACA_Stability - INFO - 안정성 테스트 시작: react_session_stress
+2025-09-22 07:03:52,524 - PACA_Stability - INFO - 테스트 완료: react_session_stress - 성공: True, 점수: 1.00
+2025-09-22 07:03:52,524 - PACA_Stability - INFO - 안정성 테스트 시작: tool_manager_overload
+2025-09-22 07:03:52,524 - PACA_Stability - INFO - 테스트 완료: tool_manager_overload - 성공: True, 점수: 0.70
+2025-09-22 07:03:52,524 - PACA_Stability - INFO - 안정성 테스트 시작: network_interruption
+2025-09-22 07:03:52,524 - PACA_Stability - INFO - 테스트 완료: network_interruption - 성공: True, 점수: 0.70
+2025-09-22 07:03:52,524 - PACA_Stability - INFO - 안정성 테스트 시작: malformed_input
+2025-09-22 07:03:52,524 - PACA_Stability - INFO - 테스트 완료: malformed_input - 성공: True, 점수: 0.70
+2025-09-22 07:03:52,525 - PACA_Stability - ERROR - 안정성 강화 실패: 'cp949' codec can't encode character '\U0001f389' in position 0: illegal multibyte sequence

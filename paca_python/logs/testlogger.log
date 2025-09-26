@@ -1,0 +1,2 @@
+2025-09-23 12:06:01 - TestLogger - INFO - safe_logging:222 - 로깅 시스템 테스트 [CHECK]
+2025-09-23 12:06:01 - TestLogger - WARNING - safe_logging:230 - 경고 메시지 테스트 [WARNING]

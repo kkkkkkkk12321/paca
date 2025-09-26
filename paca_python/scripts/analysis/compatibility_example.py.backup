@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""
+조건부 임포트 호환성 예시
+"""
+
+print("=== 조건부 임포트 시연 ===")
+
+# 방법 1: 현재 상대 임포트 방식 (패키지에서만 작동)
+print("\n1. 상대 임포트 테스트:")
+try:
+    exec("from ..core.types.base import ID")
+    print("   ✅ 상대 임포트 성공 (패키지 컨텍스트)")
+except ImportError as e:
+    print(f"   ❌ 상대 임포트 실패: {str(e)[:50]}...")
+
+# 방법 2: 절대 임포트 (항상 작동, 단 패키지 설치 필요)
+print("\n2. 절대 임포트 테스트:")
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from paca.core.types.base import ID
+    print("   ✅ 절대 임포트 성공")
+except ImportError as e:
+    print(f"   ❌ 절대 임포트 실패: {str(e)[:50]}...")
+
+# 방법 3: 조건부 임포트 (최대 호환성)
+print("\n3. 조건부 임포트 테스트:")
+
+def smart_import():
+    """스마트 임포트 함수"""
+    try:
+        # 먼저 상대 임포트 시도 (패키지 컨텍스트)
+        from ..core.types.base import ID, Timestamp
+        return "relative", (ID, Timestamp)
+    except ImportError:
+        try:
+            # 절대 임포트로 폴백 (직접 실행)
+            from paca.core.types.base import ID, Timestamp
+            return "absolute", (ID, Timestamp)
+        except ImportError:
+            # 둘 다 실패하면 None 반환
+            return "failed", None
+
+try:
+    import_type, types = smart_import()
+    if types:
+        print(f"   ✅ 조건부 임포트 성공: {import_type} 방식 사용")
+        print(f"      ID 타입: {types[0]}")
+    else:
+        print("   ❌ 모든 임포트 방식 실패")
+except Exception as e:
+    print(f"   ❌ 조건부 임포트 오류: {e}")
+
+print("\n=== 각 방식의 장단점 ===")
+print("1. 상대 임포트만:")
+print("   장점: 패키지 구조 명확, 리팩토링 용이")
+print("   단점: 직접 실행 불가")
+
+print("\n2. 절대 임포트만:")
+print("   장점: 어디서든 실행 가능")
+print("   단점: 패키지 설치 필요, 경로 하드코딩")
+
+print("\n3. 조건부 임포트:")
+print("   장점: 최대 호환성, 모든 환경에서 작동")
+print("   단점: 코드 복잡성 증가")
+
+print("\n=== 현재 Phase 2 상황 ===")
+print("❌ 문제: Phase 2 모듈들이 상대 임포트만 사용")
+print("📂 영향받는 파일:")
+print("   - paca/learning/iis_calculator.py")
+print("   - paca/learning/autonomous_trainer.py")
+print("   - paca/learning/tactic_generator.py")
+
+print("\n✅ 해결 후 가능해지는 것들:")
+print("   - python iis_calculator.py (직접 실행)")
+print("   - 개별 모듈 디버깅")
+print("   - 독립적인 기능 테스트")
+print("   - 다양한 환경에서 실행")

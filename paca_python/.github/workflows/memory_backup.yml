@@ -1,0 +1,54 @@
+name: Nightly Memory Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install awscli
+
+      - name: Export episodic memory snapshot
+        run: |
+          mkdir -p backups
+          PYTHONPATH=. python scripts/tools/memory_backup.py export episodic --output backups/episodic.json
+
+      - name: Export long-term memory snapshot
+        run: |
+          PYTHONPATH=. python scripts/tools/memory_backup.py export long_term --output backups/longterm.json
+
+      - name: Upload backup artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: paca-memory-backup
+          path: backups/*.json
+          retention-days: 7
+
+      - name: Upload backups to S3 (optional)
+        if: ${{ secrets.AWS_S3_BUCKET != '' }}
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          if [ -z "$AWS_REGION" ]; then
+            export AWS_REGION=us-east-1
+          fi
+          aws s3 cp backups/episodic.json "s3://$AWS_S3_BUCKET/paca/backups/episodic.json"
+          aws s3 cp backups/longterm.json "s3://$AWS_S3_BUCKET/paca/backups/longterm.json"

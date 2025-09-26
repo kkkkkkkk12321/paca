@@ -1,0 +1,75 @@
+{
+  "strategy_fallback_order": [
+    "sequential",
+    "hierarchical",
+    "iterative",
+    "parallel"
+  ],
+  "strategy_confidence_thresholds": {
+    "default": 0.78,
+    "sequential": 0.78,
+    "hierarchical": 0.8,
+    "iterative": 0.77,
+    "parallel": 0.82
+  },
+  "max_strategy_attempts": 4,
+  "strategy_switch_confidence_threshold": 0.8,
+  "strategy_switch_policy": {
+    "low_confidence_threshold": 0.72,
+    "consecutive_low_confidence_limit": 2,
+    "confidence_drop_threshold": 0.12,
+    "validation_issue_limit": 2,
+    "max_backtrack_failures": 2,
+    "quality_alert_levels": ["red"]
+  },
+  "strategy_switch_rules": {
+    "require_successful_backtrack": false,
+    "max_unresolved_attempts": 2
+  },
+  "domain_strategy_overrides": {
+    "creative": {
+      "fallback_order": [
+        "parallel",
+        "hierarchical",
+        "iterative",
+        "sequential"
+      ],
+      "confidence_thresholds": {
+        "parallel": 0.82,
+        "hierarchical": 0.81
+      }
+    },
+    "technical": {
+      "fallback_order": [
+        "hierarchical",
+        "sequential",
+        "iterative"
+      ]
+    }
+  },
+  "escalation": {
+    "enabled": false,
+    "after_attempts": 4,
+    "min_confidence": 0.82,
+    "reasoning_type": "deductive",
+    "trigger_reasons": [
+      "forced_validation_failure",
+      "validation_issue_limit"
+    ],
+    "quality_alert_levels": ["red"],
+    "collaboration_policy": {
+      "forced_validation_failure": {
+        "reasoning_types": ["abductive", "analogical"],
+        "max_attempts": 2
+      },
+      "backtrack_failure_limit": {
+        "reasoning_types": ["inductive"],
+        "max_attempts": 1
+      },
+      "default": {
+        "reasoning_types": ["deductive"],
+        "max_attempts": 1
+      }
+    }
+  }
+}

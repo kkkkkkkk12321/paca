@@ -1,0 +1,102 @@
+/*
+ * PACA Desktop Application - Custom Theme Template
+ *
+ * Copy this file to create your own custom theme.
+ * Replace the color values with your preferred colors.
+ *
+ * Usage:
+ * 1. Copy this file and rename it (e.g., my-theme.css)
+ * 2. Modify the color values below
+ * 3. Load the theme in your PACA application
+ */
+
+:root {
+  /* Primary Colors - Main brand colors */
+  --paca-color-primary: #YOUR_PRIMARY_COLOR;
+  --paca-color-primary-dark: #YOUR_PRIMARY_DARK_COLOR;
+  --paca-color-primary-light: #YOUR_PRIMARY_LIGHT_COLOR;
+  --paca-color-secondary: #YOUR_SECONDARY_COLOR;
+  --paca-color-secondary-dark: #YOUR_SECONDARY_DARK_COLOR;
+  --paca-color-secondary-light: #YOUR_SECONDARY_LIGHT_COLOR;
+
+  /* Background Colors - App backgrounds */
+  --paca-color-background: #YOUR_BACKGROUND_COLOR;
+  --paca-color-surface: #YOUR_SURFACE_COLOR;
+  --paca-color-card: #YOUR_CARD_COLOR;
+  --paca-color-header: #YOUR_HEADER_COLOR;
+  --paca-color-sidebar: #YOUR_SIDEBAR_COLOR;
+
+  /* Text Colors - Text hierarchy */
+  --paca-color-text-primary: #YOUR_PRIMARY_TEXT_COLOR;
+  --paca-color-text-secondary: #YOUR_SECONDARY_TEXT_COLOR;
+  --paca-color-text-disabled: #YOUR_DISABLED_TEXT_COLOR;
+  --paca-color-text-hint: #YOUR_HINT_TEXT_COLOR;
+
+  /* State Colors - Status indicators */
+  --paca-color-success: #YOUR_SUCCESS_COLOR;
+  --paca-color-warning: #YOUR_WARNING_COLOR;
+  --paca-color-error: #YOUR_ERROR_COLOR;
+  --paca-color-info: #YOUR_INFO_COLOR;
+
+  /* Interactive Colors - UI interactions */
+  --paca-color-hover: #YOUR_HOVER_COLOR;
+  --paca-color-active: #YOUR_ACTIVE_COLOR;
+  --paca-color-focus: #YOUR_FOCUS_COLOR;
+  --paca-color-disabled: #YOUR_DISABLED_COLOR;
+
+  /* Border Colors - Lines and dividers */
+  --paca-color-border: #YOUR_BORDER_COLOR;
+  --paca-color-border-light: #YOUR_LIGHT_BORDER_COLOR;
+  --paca-color-border-dark: #YOUR_DARK_BORDER_COLOR;
+  --paca-color-divider: #YOUR_DIVIDER_COLOR;
+
+  /* Shadow Colors - Depth and elevation */
+  --paca-color-shadow: rgba(0, 0, 0, 0.2);
+  --paca-color-shadow-light: rgba(0, 0, 0, 0.1);
+  --paca-color-shadow-dark: rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * Example Custom Theme - "Ocean Breeze"
+ * Uncomment and modify these values for a sample ocean-themed palette
+ */
+/*
+:root {
+  --paca-color-primary: #0077BE;
+  --paca-color-primary-dark: #005A8B;
+  --paca-color-primary-light: #4A9BE0;
+  --paca-color-secondary: #00A86B;
+  --paca-color-secondary-dark: #007F52;
+  --paca-color-secondary-light: #4DC995;
+
+  --paca-color-background: #F0F8FF;
+  --paca-color-surface: #FFFFFF;
+  --paca-color-card: #FAFFFE;
+  --paca-color-header: #E8F4F8;
+  --paca-color-sidebar: #F0F8FF;
+
+  --paca-color-text-primary: #1B4965;
+  --paca-color-text-secondary: #5FA8D3;
+  --paca-color-text-disabled: #BEE9E8;
+  --paca-color-text-hint: #8ECAE6;
+
+  --paca-color-success: #06FFA5;
+  --paca-color-warning: #FFB700;
+  --paca-color-error: #FF006E;
+  --paca-color-info: #8ECAE6;
+
+  --paca-color-hover: #E8F4F8;
+  --paca-color-active: #D1ECF1;
+  --paca-color-focus: #B6E5F0;
+  --paca-color-disabled: #F0F8FF;
+
+  --paca-color-border: #8ECAE6;
+  --paca-color-border-light: #BEE9E8;
+  --paca-color-border-dark: #5FA8D3;
+  --paca-color-divider: #8ECAE6;
+
+  --paca-color-shadow: rgba(27, 73, 101, 0.2);
+  --paca-color-shadow-light: rgba(27, 73, 101, 0.1);
+  --paca-color-shadow-dark: rgba(27, 73, 101, 0.3);
+}
+*/

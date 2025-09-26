@@ -1,0 +1,42 @@
+{
+  "items": [
+    {
+      "id": "1e2304e8-0737-4242-98a5-399b1ace4f2d",
+      "content": {
+        "message": "persistent"
+      },
+      "memory_type": "working",
+      "created_at": 1758844904.0228248,
+      "accessed_at": 1758844904.0241458,
+      "access_count": 2,
+      "strength": 1.0,
+      "context": {},
+      "associations": [],
+      "metadata": {}
+    },
+    {
+      "id": "3e8664eb-97b3-45d2-892e-ef3b0165e07b",
+      "content": {
+        "message": "hello"
+      },
+      "memory_type": "working",
+      "created_at": 1758844932.2484217,
+      "accessed_at": 1758844932.2484221,
+      "access_count": 1,
+      "strength": 1.0,
+      "context": {},
+      "associations": [],
+      "metadata": {
+        "expires_at": 1758844933.2484217
+      }
+    }
+  ],
+  "metrics": {
+    "total_stored_items": 5,
+    "average_retrieval_time": 0.00015421793460845945,
+    "hit_rate": 0.5,
+    "memory_efficiency": 0.0,
+    "consolidation_rate": 0.0
+  },
+  "saved_at": "2025-09-26T09:02:12.248448"
+}

@@ -1,0 +1,113 @@
+{
+  "episodes": [
+    {
+      "id": "634f6717-74ff-4392-9677-06c2708d3e17",
+      "content": "포터블 일화 테스트 1",
+      "memory_type": "episodic",
+      "created_at": 1758597654.1250641,
+      "accessed_at": 1758597654.1250641,
+      "access_count": 0,
+      "strength": 0.8,
+      "context": {
+        "temporal": {
+          "날짜": "2025-01-23",
+          "시간": "오후"
+        },
+        "spatial": {
+          "위치": "포터블 테스트"
+        },
+        "emotional": {
+          "기분": "긍정적"
+        },
+        "social": {
+          "상황": "개발 테스트"
+        }
+      },
+      "associations": [],
+      "metadata": {}
+    },
+    {
+      "id": "c200656f-7678-444e-a0e3-e7d45d4d1384",
+      "content": {
+        "내용": "간단한 일화 테스트",
+        "중요도": "높음"
+      },
+      "memory_type": "episodic",
+      "created_at": 1758597654.126498,
+      "accessed_at": 1758597654.1264982,
+      "access_count": 0,
+      "strength": 1.0,
+      "context": {
+        "temporal": {
+          "timestamp": 1758597654.1264582
+        },
+        "spatial": {},
+        "emotional": {},
+        "social": {}
+      },
+      "associations": [],
+      "metadata": {}
+    },
+    {
+      "id": "f0a10dc5-88e4-4ac2-babb-b73fedb47bbb",
+      "content": {
+        "content": "포터블 일화"
+      },
+      "memory_type": "episodic",
+      "created_at": 1758625268.5817404,
+      "accessed_at": 1758625268.5817406,
+      "access_count": 0,
+      "strength": 1.0,
+      "context": {
+        "temporal": {
+          "timestamp": 1758625268.5816855
+        },
+        "spatial": {},
+        "emotional": {},
+        "social": {}
+      },
+      "associations": [],
+      "metadata": {}
+    }
+  ],
+  "temporal_index": {
+    "488499": [
+      "634f6717-74ff-4392-9677-06c2708d3e17",
+      "c200656f-7678-444e-a0e3-e7d45d4d1384"
+    ],
+    "488507": [
+      "f0a10dc5-88e4-4ac2-babb-b73fedb47bbb"
+    ]
+  },
+  "context_index": {
+    "temporal:날짜:2025-01-23": [
+      "634f6717-74ff-4392-9677-06c2708d3e17"
+    ],
+    "temporal:시간:오후": [
+      "634f6717-74ff-4392-9677-06c2708d3e17"
+    ],
+    "spatial:위치:포터블 테스트": [
+      "634f6717-74ff-4392-9677-06c2708d3e17"
+    ],
+    "emotional:기분:긍정적": [
+      "634f6717-74ff-4392-9677-06c2708d3e17"
+    ],
+    "social:상황:개발 테스트": [
+      "634f6717-74ff-4392-9677-06c2708d3e17"
+    ],
+    "temporal:timestamp:1758597654.1264582": [
+      "c200656f-7678-444e-a0e3-e7d45d4d1384"
+    ],
+    "temporal:timestamp:1758625268.5816855": [
+      "f0a10dc5-88e4-4ac2-babb-b73fedb47bbb"
+    ]
+  },
+  "metrics": {
+    "total_stored_items": 3,
+    "average_retrieval_time": 7.293462753295899e-05,
+    "hit_rate": 0.0,
+    "memory_efficiency": 0.0,
+    "consolidation_rate": 0.0
+  },
+  "saved_at": "2025-09-26T09:24:58.199061"
+}

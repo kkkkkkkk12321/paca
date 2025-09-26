@@ -1,0 +1,1556 @@
+### paca 계획 gemini 사용 예정 모델 :
+1. **추론, 대화 : gemini-2.5-pro, gemini-2.5-flash 선택**
+2. **이미지 생성 : gemini-2.5-flash-image-preview, gemini-2.0-flash-preview-image-generation 선택**
+
+
+### paca 계획 gemini 테스트 api :
+1. **AIzaSyBNsviO1QfFcqKfeqVdvUzIk6bQ2McCk00,AIzaSyDxipPbvDUBQZlLucC8yTqLEc9D-HnqhLw,AIzaSyBhYUTppmklAYspJgK81w57BbEMgan7YkQ**
+
+
+Gemini API 라이브러리
+
+Gemini API로 빌드할 때는 Google 생성형 AI SDK를 사용하는 것이 좋습니다. 이는 가장 널리 사용되는 언어를 위해 Google에서 개발하고 유지관리하는 공식 프로덕션 지원 라이브러리입니다. 일반 안정화 버전이며 모든 공식 문서와 예시에 사용됩니다.
+
+참고: 기존 라이브러리 중 하나를 사용하는 경우 Google GenAI SDK로 이전하는 것이 좋습니다. 자세한 내용은 기존 라이브러리 섹션을 참고하세요.
+Gemini API를 처음 사용하는 경우 빠른 시작 가이드에 따라 시작하세요.
+
+언어 지원 및 설치
+Google GenAI SDK는 Python, JavaScript/TypeScript, Go, Java 언어로 제공됩니다. 패키지 관리자를 사용하여 각 언어의 라이브러리를 설치하거나 GitHub 저장소를 방문하여 자세히 알아볼 수 있습니다.
+
+Python
+자바스크립트
+Go
+자바
+라이브러리: google-genai
+
+GitHub 저장소: googleapis/python-genai
+
+설치: pip install google-genai
+
+정식 버전
+Google은 2024년 말 Gemini 2.0을 출시하면서 Gemini API에 액세스할 수 있는 새로운 라이브러리 세트인 Google 생성형 AI SDK를 출시하기 시작했습니다.
+
+2025년 5월부터 지원되는 모든 플랫폼에서 정식 버전 (GA)으로 출시되었으며 Gemini API에 액세스하는 데 권장되는 라이브러리입니다. 안정적이고 프로덕션 용도로 완전히 지원되며 적극적으로 유지 관리됩니다. 최신 기능에 액세스할 수 있으며 Gemini와 함께 작동할 때 최고의 성능을 제공합니다.
+
+기존 라이브러리 중 하나를 사용하는 경우 Gemini를 사용하여 최신 기능에 액세스하고 최상의 성능을 얻을 수 있도록 마이그레이션하는 것이 좋습니다. 자세한 내용은 이전 라이브러리 섹션을 참고하세요.
+
+기존 라이브러리 및 이전
+기존 라이브러리 중 하나를 사용하는 경우 새 라이브러리로 마이그레이션하는 것이 좋습니다.
+
+기존 라이브러리는 최신 기능 (예: Live API 및 Veo)에 대한 액세스를 제공하지 않으며 지원 중단 경로에 있습니다. 2025년 11월 30일부터 업데이트가 중단되고 기능 격차가 커지며 잠재적인 버그가 더 이상 수정되지 않을 수 있습니다.
+
+각 기존 라이브러리의 지원 상태는 다음 표에 자세히 설명되어 있습니다.
+
+언어	기존 라이브러리	지원 상태	권장 라이브러리
+Python	google-generativeai	버그 수정 등 모든 지원은 2025년 11월 30일에 종료됩니다.	google-genai
+JavaScript/TypeScript	@google/generativeai	버그 수정 등 모든 지원은 2025년 11월 30일에 종료됩니다.	@google/genai
+Go	google.golang.org/generative-ai	버그 수정 등 모든 지원은 2025년 11월 30일에 종료됩니다.	google.golang.org/genai
+Dart 및 Flutter	google_generative_ai	활발하게 유지되지 않음	신뢰할 수 있는 커뮤니티 또는 서드 파티 라이브러리(예: firebase_ai)를 사용하거나 REST API를 사용하여 액세스
+Swift	generative-ai-swift	활발하게 유지되지 않음	Firebase AI Logic 사용
+Android	generative-ai-android	활발하게 유지되지 않음	Firebase AI Logic 사용
+Java 개발자 참고: Gemini API용 기존 Google 제공 Java SDK가 없으므로 이전 Google 라이브러리에서 이전할 필요가 없습니다. 언어 지원 및 설치 섹션에서 새 라이브러리를 바로 시작할 수 있습니다.
+
+
+
+Google GenAI SDK 설치
+Python
+자바스크립트
+Go
+자바
+Apps Script
+Python 3.9 이상을 사용하여 다음 pip 명령어를 사용하여 google-genai 패키지를 설치합니다.
+
+
+pip install -q -U google-genai
+첫 번째 요청하기
+다음은 generateContent 메서드를 사용하여 Gemini 2.5 Flash 모델을 통해 Gemini API에 요청을 전송하는 예입니다.
+
+API 키를 환경 변수 GEMINI_API_KEY로 설정하면 Gemini API 라이브러리를 사용할 때 클라이언트에서 자동으로 선택합니다. 그렇지 않으면 클라이언트를 초기화할 때 API 키를 인수로 전달해야 합니다.
+
+Gemini API 문서의 모든 코드 샘플은 환경 변수 GEMINI_API_KEY를 설정했다고 가정합니다.
+
+Python
+자바스크립트
+Go
+자바
+Apps Script
+REST
+
+from google import genai
+
+# The client gets the API key from the environment variable `GEMINI_API_KEY`.
+client = genai.Client()
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash", contents="Explain how AI works in a few words"
+)
+print(response.text)
+많은 코드 샘플에서 '생각'이 기본적으로 사용 설정되어 있습니다.
+이 사이트의 많은 코드 샘플은 대답 품질을 향상하기 위해 기본적으로 '사고' 기능이 사용 설정된 Gemini 2.5 Flash 모델을 사용합니다. 이렇게 하면 응답 시간과 토큰 사용량이 늘어날 수 있습니다. 속도를 우선시하거나 비용을 최소화하려면 아래 예와 같이 사고 예산을 0으로 설정하여 이 기능을 사용 중지하면 됩니다. 자세한 내용은 사고 가이드를 참고하세요.
+
+참고: Thinking은 Gemini 2.5 시리즈 모델에서만 사용할 수 있으며 Gemini 2.5 Pro에서는 사용 중지할 수 없습니다.
+Python
+자바스크립트
+Go
+REST
+Apps Script
+
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Explain how AI works in a few words",
+    config=types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(thinking_budget=0) # Disables thinking
+    ),
+)
+print(response.text)
+
+
+Gemini API 키 사용
+
+Gemini API를 사용하려면 API 키가 필요합니다. Google AI Studio에서 몇 번의 클릭만으로 무료로 키를 만들 수 있습니다.
+
+API 키가 있으면 다음과 같은 옵션으로 Gemini API에 연결할 수 있습니다.
+
+API 키를 환경 변수로 설정
+API 키 명시적으로 제공
+초기 테스트의 경우 API 키를 하드코딩할 수 있지만 안전하지 않으므로 일시적으로만 하드코딩해야 합니다. API 키를 하드 코딩하는 예는 API 키 명시적으로 제공 섹션에서 확인할 수 있습니다.
+
+API 키를 환경 변수로 설정
+환경 변수 GEMINI_API_KEY 또는 GOOGLE_API_KEY를 설정하면 Gemini API 라이브러리 중 하나를 사용할 때 클라이언트에서 API 키를 자동으로 선택합니다. 이러한 변수 중 하나만 설정하는 것이 좋지만 두 변수가 모두 설정된 경우 GOOGLE_API_KEY이 우선합니다.
+
+REST API 또는 브라우저의 JavaScript를 사용하는 경우 API 키를 명시적으로 제공해야 합니다.
+
+다음은 다양한 운영체제에서 API 키를 환경 변수 GEMINI_API_KEY로 로컬에 설정하는 방법입니다.
+
+Linux/macOS - Bash
+macOS - Zsh
+Windows
+시스템 설정에서 '환경 변수'를 검색합니다.
+'사용자 변수' (현재 사용자의 경우) 또는 '시스템 변수'(모든 사용자의 경우 - 주의해서 사용)를 수정합니다.
+변수를 만들고 export GEMINI_API_KEY=your_key_here를 추가합니다.
+변경사항 적용
+API 키 명시적으로 제공
+경우에 따라 API 키를 명시적으로 제공할 수 있습니다. 예를 들면 다음과 같습니다.
+
+간단한 API 호출을 수행하고 API 키를 하드 코딩하는 것을 선호합니다.
+Gemini API 라이브러리의 환경 변수 자동 검색에 의존하지 않고 명시적으로 제어하려는 경우
+환경 변수가 지원되지 않는 환경(예: 웹)을 사용 중이거나 REST 호출을 하고 있습니다.
+다음은 API 키를 명시적으로 제공하는 방법의 예입니다.
+
+Python
+자바스크립트
+Go
+자바
+REST
+
+from google import genai
+
+client = genai.Client(api_key="YOUR_API_KEY")
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash", contents="Explain how AI works in a few words"
+)
+print(response.text)
+API 키를 안전하게 보호하기
+Gemini API 키를 비밀번호처럼 취급하세요. 보안이 침해되면 다른 사용자가 프로젝트의 할당량을 사용하고, 청구가 사용 설정된 경우 요금이 발생하며, 파일과 같은 비공개 데이터에 액세스할 수 있습니다.
+
+Gemini API 라이브러리
+
+Gemini API로 빌드할 때는 Google 생성형 AI SDK를 사용하는 것이 좋습니다. 이는 가장 널리 사용되는 언어를 위해 Google에서 개발하고 유지관리하는 공식 프로덕션 지원 라이브러리입니다. 일반 안정화 버전이며 모든 공식 문서와 예시에 사용됩니다.
+
+참고: 기존 라이브러리 중 하나를 사용하는 경우 Google GenAI SDK로 이전하는 것이 좋습니다. 자세한 내용은 기존 라이브러리 섹션을 참고하세요.
+Gemini API를 처음 사용하는 경우 빠른 시작 가이드에 따라 시작하세요.
+
+언어 지원 및 설치
+Google GenAI SDK는 Python, JavaScript/TypeScript, Go, Java 언어로 제공됩니다. 패키지 관리자를 사용하여 각 언어의 라이브러리를 설치하거나 GitHub 저장소를 방문하여 자세히 알아볼 수 있습니다.
+
+Python
+자바스크립트
+Go
+자바
+라이브러리: google-genai
+
+GitHub 저장소: googleapis/python-genai
+
+설치: pip install google-genai
+
+정식 버전
+Google은 2024년 말 Gemini 2.0을 출시하면서 Gemini API에 액세스할 수 있는 새로운 라이브러리 세트인 Google 생성형 AI SDK를 출시하기 시작했습니다.
+
+2025년 5월부터 지원되는 모든 플랫폼에서 정식 버전 (GA)으로 출시되었으며 Gemini API에 액세스하는 데 권장되는 라이브러리입니다. 안정적이고 프로덕션 용도로 완전히 지원되며 적극적으로 유지 관리됩니다. 최신 기능에 액세스할 수 있으며 Gemini와 함께 작동할 때 최고의 성능을 제공합니다.
+
+기존 라이브러리 중 하나를 사용하는 경우 Gemini를 사용하여 최신 기능에 액세스하고 최상의 성능을 얻을 수 있도록 마이그레이션하는 것이 좋습니다. 자세한 내용은 이전 라이브러리 섹션을 참고하세요.
+
+기존 라이브러리 및 이전
+기존 라이브러리 중 하나를 사용하는 경우 새 라이브러리로 마이그레이션하는 것이 좋습니다.
+
+기존 라이브러리는 최신 기능 (예: Live API 및 Veo)에 대한 액세스를 제공하지 않으며 지원 중단 경로에 있습니다. 2025년 11월 30일부터 업데이트가 중단되고 기능 격차가 커지며 잠재적인 버그가 더 이상 수정되지 않을 수 있습니다.
+
+각 기존 라이브러리의 지원 상태는 다음 표에 자세히 설명되어 있습니다.
+
+언어	기존 라이브러리	지원 상태	권장 라이브러리
+Python	google-generativeai	버그 수정 등 모든 지원은 2025년 11월 30일에 종료됩니다.	google-genai
+JavaScript/TypeScript	@google/generativeai	버그 수정 등 모든 지원은 2025년 11월 30일에 종료됩니다.	@google/genai
+Go	google.golang.org/generative-ai	버그 수정 등 모든 지원은 2025년 11월 30일에 종료됩니다.	google.golang.org/genai
+Dart 및 Flutter	google_generative_ai	활발하게 유지되지 않음	신뢰할 수 있는 커뮤니티 또는 서드 파티 라이브러리(예: firebase_ai)를 사용하거나 REST API를 사용하여 액세스
+Swift	generative-ai-swift	활발하게 유지되지 않음	Firebase AI Logic 사용
+Android	generative-ai-android	활발하게 유지되지 않음	Firebase AI Logic 사용
+Java 개발자 참고: Gemini API용 기존 Google 제공 Java SDK가 없으므로 이전 Google 라이브러리에서 이전할 필요가 없습니다. 언어 지원 및 설치 섹션에서 새 라이브러리를 바로 시작할 수 있습니다.
+
+# About this file (for humans only)
+
+This file provides curated prompts to help generative AI models like Gemini and
+Claude produce code using the latest Gemini APIs.
+
+Generative models are often unaware of recent API updates and may suggest
+outdated or legacy code. You can copy and paste the instructions from this file
+into your development environment to provide the model with the necessary
+context.
+
+> **Note: This is an Alpha (v0.2) Release** This is an early and experimental
+> collection of prompts. It's intended for testing and to gather feedback from
+> the community. Results are not guaranteed, and we expect frequent updates.
+
+## Disclaimer
+
+Please be aware that generative models can generate incorrect or unexpected
+outputs. You should always verify the results.
+
+## Scope
+
+To maintain a manageable context size, this guide does not cover the full range
+of the Gemini API's features. Refer to our [developer
+documentation](https://ai.google.dev/gemini-api/docs) for comprehensive feature
+guides.
+
+If you'd like to reduce context window consumption, you can experiment with
+removing sections on this file. You can let us know how it works at our
+[community forums](https://discuss.ai.google.dev/c/gemini-api).
+
+Note: These instructions are for the [Gemini API](https://ai.google.dev/gemini-api/docs). Vertex AI developers should note that while the APIs are similar, there may be minor differences, and the [official Vertex AI documentation](https://cloud.google.com/vertex-ai/docs) should be used for definitive guidance
+
+## Contributions
+
+We welcome suggestions for improvement. Please feel free to open an issue or
+send a pull request.
+
+You can copy paste the next section.
+
+# Gemini API Coding Guidelines (Python)
+
+You are a Gemini API coding expert. Help me with writing code using the Gemini
+API calling the official libraries and SDKs.
+
+Please follow the following guidelines when generating code.
+
+You can find the official SDK documentation and code samples here:
+https://ai.google.dev/gemini-api/docs
+
+## Golden Rule: Use the Correct and Current SDK
+
+Always use the Google GenAI SDK to call the Gemini models, which became the
+standard library for all Gemini API interactions as of 2025. Do not use legacy
+libraries and SDKs.
+
+-   **Library Name:** Google GenAI SDK
+-   **Python Package:** `google-genai`
+-   **Legacy Library**: (`google-generativeai`) is deprecated.
+
+**Installation:**
+
+-   **Incorrect:** `pip install google-generativeai`
+-   **Incorrect:** `pip install google-ai-generativelanguage`
+-   **Correct:** `pip install google-genai`
+
+**APIs and Usage:**
+
+-   **Incorrect:** `import google.generativeai as genai`-> **Correct:** `from
+    google import genai`
+-   **Incorrect:** `from google.ai import generativelanguage_v1`  ->
+    **Correct:** `from google import genai`
+-   **Incorrect:** `from google.generativeai` -> **Correct:** `from google
+    import genai`
+-   **Incorrect:** `from google.generativeai import types` -> **Correct:** `from
+    google.genai import types`
+-   **Incorrect:** `import google.generativeai as genai` -> **Correct:** `from
+    google import genai`
+-   **Incorrect:** `genai.configure(api_key=...)` -> **Correct:** `client =
+    genai.Client(api_key="...")`
+-   **Incorrect:** `model = genai.GenerativeModel(...)`
+-   **Incorrect:** `model.generate_content(...)` -> **Correct:**
+    `client.models.generate_content(...)`
+-   **Incorrect:** `response = model.generate_content(..., stream=True)` ->
+    **Correct:** `client.models.generate_content_stream(...)`
+-   **Incorrect:** `genai.GenerationConfig(...)` -> **Correct:**
+    `types.GenerateContentConfig(...)`
+-   **Incorrect:** `safety_settings={...}` -> **Correct:** Use `safety_settings`
+    inside a `GenerateContentConfig` object.
+-   **Incorrect:** `from google.api_core.exceptions import GoogleAPIError` ->
+    **Correct:** `from google.genai.errors import APIError`
+-   **Incorrect:** `types.ResponseModality.TEXT`
+
+## Initialization and API key
+
+The `google-genai` library requires creating a client object for all API calls.
+
+-   Always use `client = genai.Client()` to create a client object.
+-   Set `GEMINI_API_KEY` environment variable, which will be picked up
+    automatically.
+
+## Models
+
+-   By default, use the following models when using `google-genai`:
+    -   **General Text & Multimodal Tasks:** `gemini-2.5-flash`
+    -   **Coding and Complex Reasoning Tasks:** `gemini-2.5-pro`
+    -   **Image Generation Tasks:** `imagen-3.0-generate-002`
+    -   **Video Generation Tasks:** `veo-2.0-generate-001`
+
+-   It is also acceptable to use following models if explicitly requested by the
+    user:
+    -   **Gemini 2.0 Series**: `gemini-2.0-flash`, `gemini-2.0-pro`
+
+-   Do not use the following deprecated models (or their variants like
+    `gemini-1.5-flash-latest`):
+    -   **Prohibited:** `gemini-1.5-flash`
+    -   **Prohibited:** `gemini-1.5-pro`
+    -   **Prohibited:** `gemini-pro`
+
+## Basic Inference (Text Generation)
+
+Here's how to generate a response from a text prompt.
+
+```python
+from google import genai
+
+client = genai.Client()
+
+response = client.models.generate_content(
+  model='gemini-2.5-flash',
+  contents='why is the sky blue?',
+)
+
+print(response.text) # output is often markdown
+```
+
+Multimodal inputs are supported by passing a PIL-Image in the `contents` list:
+
+```python
+from google import genai
+from PIL import Image
+
+client = genai.Client()
+
+image = Image.open(img_path)
+
+response = client.models.generate_content(
+  model='gemini-2.5-flash',
+  contents=[image, "explain that image"],
+)
+
+print(response.text) # The output often is markdown
+```
+
+You can also use `Part.from_bytes` type to pass a variety of data types (images,
+audio, video, pdf).
+
+```python
+from google.genai import types
+
+  with open('path/to/small-sample.jpg', 'rb') as f:
+    image_bytes = f.read()
+
+  response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents=[
+      types.Part.from_bytes(
+        data=image_bytes,
+        mime_type='image/jpeg',
+      ),
+      'Caption this image.'
+    ]
+  )
+
+  print(response.text)
+```
+
+For larger files, use `client.files.upload`:
+
+```python
+f = client.files.upload(file=img_path)
+
+response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents=[f, "can you describe this image?"]
+)
+```
+
+You can delete files after use like this:
+
+```python
+myfile = client.files.upload(file='path/to/sample.mp3')
+client.files.delete(name=myfile.name)
+```
+
+## Additional Capabilities and Configurations
+
+Below are examples of advanced configurations.
+
+### Thinking
+
+Gemini 2.5 series models support thinking, which is on by default for
+`gemini-2.5-flash`. It can be adjusted by using `thinking_budget` setting.
+Setting it to zero turns thinking off, and will reduce latency.
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+
+client.models.generate_content(
+  model='gemini-2.5-flash',
+  contents="What is AI?",
+  config=types.GenerateContentConfig(
+    thinking_config=types.ThinkingConfig(
+      thinking_budget=0
+    )
+  )
+)
+```
+
+IMPORTANT NOTES:
+
+-   Minimum thinking budget for `gemini-2.5-pro` is `128` and thinking can not
+    be turned off for that model.
+-   No models (apart from Gemini 2.5 series) support thinking or thinking
+    budgets APIs. Do not try to adjust thinking budgets other models (such as
+    `gemini-2.0-flash` or `gemini-2.0-pro`) otherwise it will cause syntax
+    errors.
+
+### System instructions
+
+Use system instructions to guide model's behavior.
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+
+config = types.GenerateContentConfig(
+    system_instruction="You are a pirate",
+)
+
+response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    config=config,
+)
+
+print(response.text)
+```
+
+### Hyperparameters
+
+You can also set `temperature` or `max_output_tokens` within
+`types.GenerateContentConfig`
+**Avoid** setting `max_output_tokens`, `topP`, `topK` unless explicitly
+requested by the user.
+
+### Safety configurations
+
+Avoid setting safety configurations unless explicitly requested by the user. If
+explicitly asked for by the user, here is a sample API:
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+
+img = Image.open("/path/to/img")
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=['Do these look store-bought or homemade?', img],
+    config=types.GenerateContentConfig(
+      safety_settings=[
+        types.SafetySetting(
+            category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+            threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        ),
+      ]
+    )
+)
+
+print(response.text)
+```
+
+### Streaming
+
+It is possible to stream responses to reduce user perceived latency:
+
+```python
+from google import genai
+
+client = genai.Client()
+
+response = client.models.generate_content_stream(
+    model="gemini-2.5-flash",
+    contents=["Explain how AI works"]
+)
+for chunk in response:
+    print(chunk.text, end="")
+```
+
+### Chat
+
+For multi-turn conversations, use the `chats` service to maintain conversation
+history.
+
+```python
+from google import genai
+
+client = genai.Client()
+chat = client.chats.create(model="gemini-2.5-flash")
+
+response = chat.send_message("I have 2 dogs in my house.")
+print(response.text)
+
+response = chat.send_message("How many paws are in my house?")
+print(response.text)
+
+for message in chat.get_history():
+    print(f'role - {message.role}',end=": ")
+    print(message.parts[0].text)
+```
+
+### Structured outputs
+
+Use structured outputs to force the model to return a response that conforms to
+a specific Pydantic schema.
+
+```python
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
+
+client = genai.Client()
+
+# Define the desired output structure using Pydantic
+class Recipe(BaseModel):
+    recipe_name: str
+    description: str
+    ingredients: list[str]
+    steps: list[str]
+
+# Request the model to populate the schema
+response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents="Provide a classic recipe for chocolate chip cookies.",
+    config=types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=Recipe,
+    ),
+)
+
+# The response.text will be a valid JSON string matching the Recipe schema
+print(response.text)
+```
+
+#### Function Calling (Tools)
+
+You can provide the model with tools (functions) it can use to bring in external
+information to answer a question or act on a request outside the model.
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+
+# Define a function that the model can call (to access external information)
+def get_current_weather(city: str) -> str:
+    """Returns the current weather in a given city. For this example, it's hardcoded."""
+    if "boston" in city.lower():
+        return "The weather in Boston is 15°C and sunny."
+    else:
+        return f"Weather data for {city} is not available."
+
+# Make the function available to the model as a tool
+response = client.models.generate_content(
+  model='gemini-2.5-flash',
+  contents="What is the weather like in Boston?",
+  config=types.GenerateContentConfig(
+      tools=[get_current_weather]
+  ),
+)
+# The model may respond with a request to call the function
+if response.function_calls:
+    print("Function calls requested by the model:")
+    for function_call in response.function_calls:
+        print(f"- Function: {function_call.name}")
+        print(f"- Args: {dict(function_call.args)}")
+else:
+    print("The model responded directly:")
+    print(response.text)
+```
+
+### Generate Images
+
+Here's how to generate images using the Imagen models.
+
+```python
+from google import genai
+from PIL import Image
+from io import BytesIO
+
+client = genai.Client()
+
+result = client.models.generate_images(
+    model='imagen-3.0-generate-002',
+    prompt="Image of a cat",
+    config=dict(
+        number_of_images=1, # 1 to 4
+        output_mime_type="image/jpeg",
+        person_generation="ALLOW_ADULT" # 'ALLOW_ALL' (but not in Europe/Mena), 'DONT_ALLOW' or 'ALLOW_ADULT'
+        aspect_ratio="1:1" # "1:1", "3:4", "4:3", "9:16", or "16:9"
+    )
+)
+
+for generated_image in result.generated_images:
+   image = Image.open(BytesIO(generated_image.image.image_bytes))
+```
+
+### Generate Videos
+
+Here's how to generate videos using the Veo models. Usage of Veo can be costly,
+so after generating code for it, give user a heads up to check pricing for Veo.
+
+```python
+import time
+from google import genai
+from google.genai import types
+from PIL import Image
+
+client = genai.Client()
+
+PIL_image = Image.open("path/to/image.png") # Optional
+
+operation = client.models.generate_videos(
+    model="veo-2.0-generate-001",
+    prompt="Panning wide shot of a calico kitten sleeping in the sunshine",
+    image = PIL_image,
+    config=types.GenerateVideosConfig(
+        person_generation="dont_allow",  # "dont_allow" or "allow_adult"
+        aspect_ratio="16:9",  # "16:9" or "9:16"
+        number_of_videos=1, # supported value is 1-4, use 1 by default
+        duration_seconds=8, # supported value is 5-8
+    ),
+)
+
+while not operation.done:
+    time.sleep(20)
+    operation = client.operations.get(operation)
+
+for n, generated_video in enumerate(operation.response.generated_videos):
+    client.files.download(file=generated_video.video) # just file=, no need for path= as it doesn't save yet
+    generated_video.video.save(f"video{n}.mp4")  # saves the video
+
+```
+
+### Search Grounding
+
+Google Search can be used as a tool for grounding queries that with up to date
+information from the web.
+
+**Correct** 
+```python
+from google import genai
+
+client = genai.Client()
+
+response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents='What was the score of the latest Olympique Lyonais' game?',
+    config={"tools": [{"google_search": {}}]},
+)
+
+# Response
+print(f"Response:\n {response.text}")
+# Search details
+print(f"Search Query: {response.candidates[0].grounding_metadata.web_search_queries}")
+# Urls used for grounding
+print(f"Search Pages: {', '.join([site.web.title for site in response.candidates[0].grounding_metadata.grounding_chunks])}")
+```
+
+The output `response.text` will likely not be in JSON format, do not attempt to
+parse it as JSON.
+
+### Content and Part Hierarchy
+
+While the simpler API call is often sufficient, you may run into scenarios where
+you need to work directly with the underlying `Content` and `Part` objects for
+more explicit control. These are the fundamental building blocks of the
+`generate_content` API.
+
+For instance, the following simple API call:
+
+```python
+from google import genai
+
+client = genai.Client()
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="How does AI work?"
+)
+print(response.text)
+```
+
+is effectively a shorthand for this more explicit structure:
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=[
+      types.Content(role="user", parts=[types.Part.from_text(text="How does AI work?")]),
+    ]
+)
+print(response.text)
+```
+
+## Other APIs
+
+The list of APIs and capabilities above are not comprehensive. If users ask you
+to generate code for a capability not provided above, refer them to
+ai.google.dev/gemini-api/docs.
+
+## Useful Links
+
+-   Documentation: ai.google.dev/gemini-api/docs
+-   API Keys and Authentication: ai.google.dev/gemini-api/docs/api-key
+-   Models: ai.google.dev/models
+-   API Pricing: ai.google.dev/pricing
+-   Rate Limits: ai.google.dev/rate-limits
+
+
+# Gemini API 종합 가이드
+
+## 목차
+1. [개요](#개요)
+2. [텍스트 생성](#텍스트-생성)
+3. [이미지 생성](#이미지-생성)
+4. [함수 호출](#함수-호출)
+5. [구조화된 출력](#구조화된-출력)
+6. [Live API](#live-api)
+7. [기타 주요 기능](#기타-주요-기능)
+8. [모델 선택 가이드](#모델-선택-가이드)
+9. [개발 권장사항](#개발-권장사항)
+
+---
+
+## 개요
+
+Gemini API는 Google의 강력한 멀티모달 AI 모델에 액세스할 수 있는 통합 API입니다. 텍스트, 이미지, 오디오, 비디오 등 다양한 형태의 입력과 출력을 지원하며, 실시간 상호작용부터 복잡한 업무 자동화까지 광범위한 사용 사례를 커버합니다.
+
+### 주요 특징
+- **멀티모달 입출력**: 텍스트, 이미지, 오디오, 비디오 지원
+- **실시간 상호작용**: Live API를 통한 저지연 음성/영상 대화
+- **함수 호출**: 외부 도구 및 API 연동
+- **구조화된 출력**: JSON, enum 등 정형화된 데이터 생성
+- **이미지 생성**: Gemini 네이티브 및 Imagen 3 지원
+
+---
+
+## 텍스트 생성
+
+### 기본 텍스트 생성
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client(api_key="GEMINI_API_KEY")
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=["How does AI work?"]
+)
+
+print(response.text)
+```
+
+```javascript
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: "GEMINI_API_KEY" });
+
+const response = await ai.models.generateContent({
+    model: "gemini-2.0-flash",
+    contents: "How does AI work?",
+});
+
+console.log(response.text);
+```
+
+### 시스템 지시사항
+
+```python
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    config=types.GenerateContentConfig(
+        system_instruction="You are a cat. Your name is Neko."
+    ),
+    contents="Hello there"
+)
+```
+
+### 생성 매개변수 설정
+
+```python
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=["Explain how AI works"],
+    config=types.GenerateContentConfig(
+        max_output_tokens=500,
+        temperature=0.1,
+        top_p=0.9,
+        top_k=20
+    )
+)
+```
+
+### 멀티모달 입력
+
+```python
+from PIL import Image
+
+image = Image.open("/path/to/image.png")
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=[image, "Tell me about this image"]
+)
+```
+
+### 스트리밍 응답
+
+```python
+response = client.models.generate_content_stream(
+    model="gemini-2.0-flash",
+    contents=["Explain how AI works"]
+)
+
+for chunk in response:
+    print(chunk.text, end="")
+```
+
+### 멀티턴 대화
+
+```python
+chat = client.chats.create(model="gemini-2.0-flash")
+
+response1 = chat.send_message("I have 2 dogs in my house.")
+print(response1.text)
+
+response2 = chat.send_message("How many paws are in my house?")
+print(response2.text)
+
+# 대화 히스토리 확인
+for message in chat.get_history():
+    print(f'{message.role}: {message.parts[0].text}')
+```
+
+---
+
+## 이미지 생성
+
+### Gemini 네이티브 이미지 생성
+
+```python
+from google.genai import types
+from PIL import Image
+from io import BytesIO
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash-preview-image-generation",
+    contents="Create a 3d rendered image of a pig with wings and a top hat flying over a happy futuristic scifi city with lots of greenery",
+    config=types.GenerateContentConfig(
+        response_modalities=['TEXT', 'IMAGE']
+    )
+)
+
+for part in response.candidates[0].content.parts:
+    if part.text:
+        print(part.text)
+    elif part.inline_data:
+        image = Image.open(BytesIO(part.inline_data.data))
+        image.save('generated_image.png')
+        image.show()
+```
+
+### 이미지 편집
+
+```python
+import PIL.Image
+
+image = PIL.Image.open('/path/to/image.png')
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash-preview-image-generation",
+    contents=["Can you add a llama next to me in this image?", image],
+    config=types.GenerateContentConfig(
+        response_modalities=['TEXT', 'IMAGE']
+    )
+)
+```
+
+### Imagen 3 이미지 생성
+
+```python
+response = client.models.generate_images(
+    model='imagen-3.0-generate-002',
+    prompt='Robot holding a red skateboard',
+    config=types.GenerateImagesConfig(
+        number_of_images=4,
+        aspect_ratio="16:9",
+        person_generation="ALLOW_ADULT"
+    )
+)
+
+for i, generated_image in enumerate(response.generated_images):
+    image = Image.open(BytesIO(generated_image.image.image_bytes))
+    image.save(f'imagen_output_{i}.png')
+```
+
+### Imagen 프롬프트 작성 팁
+
+1. **주제 명확화**: 무엇을 그릴지 명확히 기술
+2. **컨텍스트 설정**: 배경이나 환경 설명
+3. **스타일 지정**: 사진, 그림, 스케치 등 스타일 명시
+4. **품질 수정자**: "4K", "HDR", "professional", "detailed" 등 사용
+5. **카메라 설정**: "close-up", "wide-angle", "macro lens" 등
+
+```python
+# 좋은 프롬프트 예시
+prompt = """
+A professional studio photograph of a modern minimalist chair, 
+natural lighting, 4K quality, product photography style, 
+clean white background, sharp focus
+"""
+```
+
+---
+
+## 함수 호출
+
+함수 호출을 통해 Gemini를 외부 도구 및 API와 연결할 수 있습니다.
+
+### 함수 선언 정의
+
+```python
+# 함수 선언
+set_light_values_declaration = {
+    "name": "set_light_values",
+    "description": "Sets the brightness and color temperature of a light.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "brightness": {
+                "type": "integer",
+                "description": "Light level from 0 to 100",
+            },
+            "color_temp": {
+                "type": "string",
+                "enum": ["daylight", "cool", "warm"],
+                "description": "Color temperature of the light",
+            },
+        },
+        "required": ["brightness", "color_temp"],
+    },
+}
+
+# 실제 구현 함수
+def set_light_values(brightness: int, color_temp: str) -> dict:
+    """스마트 조명 제어 함수"""
+    return {"brightness": brightness, "colorTemperature": color_temp}
+```
+
+### 함수 호출 실행
+
+```python
+from google.genai import types
+
+# 도구 설정
+tools = types.Tool(function_declarations=[set_light_values_declaration])
+config = types.GenerateContentConfig(tools=[tools])
+
+# 모델 호출
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="Turn the lights down to a romantic level",
+    config=config,
+)
+
+# 함수 호출 확인 및 실행
+if response.candidates[0].content.parts[0].function_call:
+    function_call = response.candidates[0].content.parts[0].function_call
+    print(f"Function: {function_call.name}")
+    print(f"Args: {function_call.args}")
+    
+    # 함수 실행
+    result = set_light_values(**function_call.args)
+    
+    # 결과를 모델에 전달하여 최종 응답 생성
+    function_response_part = types.Part.from_function_response(
+        name=function_call.name,
+        response={"result": result},
+    )
+    
+    final_response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[
+            types.Content(role="user", parts=[types.Part(text="Turn the lights down to a romantic level")]),
+            types.Content(role="model", parts=[types.Part(function_call=function_call)]),
+            types.Content(role="user", parts=[function_response_part])
+        ],
+        config=config,
+    )
+    
+    print(final_response.text)
+```
+
+### 병렬 함수 호출
+
+```python
+# 여러 함수 동시 실행
+house_tools = [
+    types.Tool(function_declarations=[power_disco_ball, start_music, dim_lights])
+]
+
+config = {
+    "tools": house_tools,
+    "tool_config": {"function_calling_config": {"mode": "any"}},
+}
+
+response = chat.send_message("Turn this place into a party!")
+
+# 모든 함수 호출 결과 처리
+for fn in response.function_calls:
+    args = ", ".join(f"{key}={val}" for key, val in fn.args.items())
+    print(f"{fn.name}({args})")
+```
+
+### 자동 함수 호출 (Python 전용)
+
+```python
+def get_current_temperature(location: str) -> dict:
+    """현재 온도를 가져오는 함수
+    
+    Args:
+        location: 도시명 (예: "Seoul, KR")
+    
+    Returns:
+        온도 정보가 담긴 딕셔너리
+    """
+    # API 호출 로직
+    return {"temperature": 25, "unit": "Celsius"}
+
+# 함수 자체를 도구로 전달 (자동 스키마 생성)
+config = types.GenerateContentConfig(tools=[get_current_temperature])
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="What's the temperature in Seoul?",
+    config=config,
+)
+
+print(response.text)  # 자동으로 함수 호출 및 응답 처리
+```
+
+---
+
+## 구조화된 출력
+
+### JSON 스키마 구성
+
+```python
+from pydantic import BaseModel
+from typing import List
+
+class Recipe(BaseModel):
+    recipe_name: str
+    ingredients: List[str]
+    cooking_time: int
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="List popular cookie recipes with ingredients and cooking time",
+    config={
+        "response_mime_type": "application/json",
+        "response_schema": List[Recipe],
+    },
+)
+
+# JSON 문자열로 사용
+print(response.text)
+
+# 객체로 사용 (Python 전용)
+recipes: List[Recipe] = response.parsed
+for recipe in recipes:
+    print(f"{recipe.recipe_name}: {len(recipe.ingredients)} ingredients")
+```
+
+### JavaScript에서 스키마 정의
+
+```javascript
+import { Type } from "@google/genai";
+
+const recipeSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            recipeName: { type: Type.STRING },
+            ingredients: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+            },
+            cookingTime: { type: Type.NUMBER }
+        },
+        propertyOrdering: ["recipeName", "ingredients", "cookingTime"]
+    }
+};
+
+const response = await ai.models.generateContent({
+    model: "gemini-2.0-flash",
+    contents: "List popular cookie recipes",
+    config: {
+        responseMimeType: "application/json",
+        responseSchema: recipeSchema,
+    },
+});
+```
+
+### Enum 값 생성
+
+```python
+import enum
+
+class MusicGenre(enum.Enum):
+    ROCK = "rock"
+    POP = "pop"
+    JAZZ = "jazz"
+    CLASSICAL = "classical"
+    ELECTRONIC = "electronic"
+
+response = client.models.generate_content(
+    model='gemini-2.0-flash',
+    contents='What genre is "Bohemian Rhapsody" by Queen?',
+    config={
+        'response_mime_type': 'text/x.enum',
+        'response_schema': MusicGenre,
+    },
+)
+
+print(response.text)  # "rock"
+```
+
+### 복합 구조화된 출력
+
+```python
+from pydantic import BaseModel
+import enum
+from typing import List, Optional
+
+class Priority(enum.Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+class Task(BaseModel):
+    title: str
+    description: Optional[str] = None
+    priority: Priority
+    estimated_hours: int
+
+class ProjectPlan(BaseModel):
+    project_name: str
+    tasks: List[Task]
+    total_estimated_hours: int
+
+response = client.models.generate_content(
+    model='gemini-2.0-flash',
+    contents='Create a project plan for building a simple web application',
+    config={
+        'response_mime_type': 'application/json',
+        'response_schema': ProjectPlan,
+    },
+)
+
+project: ProjectPlan = response.parsed
+```
+
+---
+
+## Live API
+
+Live API는 실시간 음성 및 비디오 상호작용을 지원합니다.
+
+### 기본 Live API 설정
+
+```python
+import asyncio
+import io
+from pathlib import Path
+import wave
+from google import genai
+from google.genai import types
+import soundfile as sf
+import librosa
+
+client = genai.Client()
+
+# 모델 선택
+# 네이티브 오디오: "gemini-2.5-flash-preview-native-audio-dialog"
+# 하프 캐스케이드: "gemini-live-2.5-flash-preview"
+model = "gemini-2.5-flash-preview-native-audio-dialog"
+
+config = {
+    "response_modalities": ["AUDIO"],
+    "system_instruction": "You are a helpful assistant and answer in a friendly tone.",
+}
+
+async def main():
+    async with client.aio.live.connect(model=model, config=config) as session:
+        # 오디오 파일 로드 및 변환 (16kHz, 16-bit PCM)
+        buffer = io.BytesIO()
+        y, sr = librosa.load("sample.wav", sr=16000)
+        sf.write(buffer, y, sr, format='RAW', subtype='PCM_16')
+        buffer.seek(0)
+        audio_bytes = buffer.read()
+
+        # 오디오 전송
+        await session.send_realtime_input(
+            audio=types.Blob(data=audio_bytes, mime_type="audio/pcm;rate=16000")
+        )
+
+        # 응답 수신 및 저장
+        wf = wave.open("response.wav", "wb")
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(24000)  # 출력은 24kHz
+
+        async for response in session.receive():
+            if response.data is not None:
+                wf.writeframes(response.data)
+
+        wf.close()
+
+asyncio.run(main())
+```
+
+### JavaScript Live API
+
+```javascript
+import { GoogleGenAI, Modality } from '@google/genai';
+import * as fs from "node:fs";
+import pkg from 'wavefile';
+const { WaveFile } = pkg;
+
+const ai = new GoogleGenAI({});
+const model = "gemini-2.5-flash-preview-native-audio-dialog";
+
+const config = {
+    responseModalities: [Modality.AUDIO],
+    systemInstruction: "You are a helpful assistant."
+};
+
+async function live() {
+    const session = await ai.live.connect({
+        model: model,
+        config: config,
+        callbacks: {
+            onopen: () => console.log('Connected'),
+            onmessage: (message) => handleMessage(message),
+            onerror: (e) => console.error('Error:', e),
+            onclose: (e) => console.log('Closed:', e.reason),
+        },
+    });
+
+    // 오디오 파일 전송
+    const fileBuffer = fs.readFileSync("sample.wav");
+    const wav = new WaveFile();
+    wav.fromBuffer(fileBuffer);
+    wav.toSampleRate(16000);
+    wav.toBitDepth("16");
+    
+    session.sendRealtimeInput({
+        audio: {
+            data: wav.toBase64(),
+            mimeType: "audio/pcm;rate=16000"
+        }
+    });
+}
+```
+
+### Live API 다중 도구 사용
+
+```python
+# 네이티브 도구와 함수 호출 결합
+prompt = """
+Hey, I need you to do three things:
+1. Turn on the lights.
+2. Compute the largest prime palindrome under 100000.
+3. Search for information about recent earthquakes in California.
+"""
+
+tools = [
+    {'google_search': {}},
+    {'code_execution': {}},
+    {'function_declarations': [turn_on_lights_schema, turn_off_lights_schema]}
+]
+
+await run(prompt, tools=tools, modality="AUDIO")
+```
+
+---
+
+## 기타 주요 기능
+
+### 음성 생성
+
+```python
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="Tell me a short story",
+    config=types.GenerateContentConfig(
+        response_modalities=["AUDIO"]
+    )
+)
+
+# 오디오 데이터 저장
+with open("story.wav", "wb") as f:
+    f.write(response.candidates[0].content.parts[0].inline_data.data)
+```
+
+### 장문 컨텍스트 처리
+
+```python
+# 긴 문서 처리
+long_document = "..." # 매우 긴 텍스트
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=f"Summarize this document: {long_document}",
+    config=types.GenerateContentConfig(
+        max_output_tokens=1000
+    )
+)
+```
+
+### 문서 처리
+
+```python
+# PDF, DOCX 등 문서 업로드 및 분석
+from google.genai import types
+
+document = client.files.upload(path="document.pdf")
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=[
+        "Extract key information from this document",
+        types.Part.from_uri(document.uri, document.mime_type)
+    ]
+)
+```
+
+### 비디오 이해
+
+```python
+# 비디오 파일 업로드 및 분석
+video = client.files.upload(path="video.mp4")
+
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=[
+        "Describe what happens in this video",
+        types.Part.from_uri(video.uri, video.mime_type)
+    ]
+)
+```
+
+### Google 검색 연동
+
+```python
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="What are the latest developments in quantum computing?",
+    config=types.GenerateContentConfig(
+        tools=[{"google_search": {}}]
+    )
+)
+```
+
+### 코드 실행
+
+```python
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="Calculate the fibonacci sequence up to 50 and plot it",
+    config=types.GenerateContentConfig(
+        tools=[{"code_execution": {}}]
+    )
+)
+```
+
+---
+
+## 모델 선택 가이드
+
+### Gemini 2.0 Flash
+- **용도**: 일반적인 텍스트/이미지 생성, 멀티모달 작업
+- **특징**: 빠른 응답, 비용 효율적
+- **권장 사용**: 일상적인 AI 작업, 프로토타이핑
+
+### Gemini 2.5 Flash
+- **용도**: 고급 추론, 복잡한 멀티모달 작업
+- **특징**: 향상된 성능, 더 긴 컨텍스트
+- **권장 사용**: 복잡한 분석, 전문적인 작업
+
+### Imagen 3
+- **용도**: 고품질 이미지 생성
+- **특징**: 최고 품질의 이미지, 다양한 스타일 지원
+- **권장 사용**: 아트워크, 마케팅 자료, 전문 이미지
+
+### Live API 모델
+- **Native Audio**: `gemini-2.5-flash-preview-native-audio-dialog`
+  - 가장 자연스러운 음성
+  - 감정적 대화 지원
+- **Half Cascade**: `gemini-live-2.5-flash-preview`
+  - 더 안정적인 성능
+  - 도구 사용 시 권장
+
+---
+
+## 개발 권장사항
+
+### 프롬프트 엔지니어링
+
+1. **명확성**: 구체적이고 명확한 지시사항 제공
+2. **컨텍스트**: 충분한 배경 정보 포함
+3. **예시**: Few-shot 학습을 위한 예시 제공
+4. **구조화**: 체계적인 프롬프트 구성
+
+```python
+# 좋은 프롬프트 예시
+prompt = """
+You are a professional technical writer. 
+
+Task: Create API documentation for the following function.
+
+Function:
+def calculate_tax(income: float, tax_rate: float) -> float:
+    return income * tax_rate
+
+Requirements:
+- Include parameter descriptions
+- Provide usage examples
+- Mention error conditions
+- Use clear, concise language
+
+Format the output as Markdown.
+"""
+```
+
+### 에러 처리
+
+```python
+try:
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents="Generate content",
+        config=config
+    )
+    
+    if response.candidates[0].finish_reason == "SAFETY":
+        print("Content was filtered for safety reasons")
+    elif response.candidates[0].finish_reason == "MAX_TOKENS":
+        print("Response was truncated due to token limit")
+    else:
+        print(response.text)
+        
+except Exception as e:
+    print(f"API call failed: {e}")
+```
+
+### 비용 최적화
+
+1. **적절한 모델 선택**: 용도에 맞는 모델 사용
+2. **토큰 관리**: 입출력 토큰 수 모니터링
+3. **캐싱**: 반복적인 요청 결과 캐싱
+4. **배치 처리**: 가능한 경우 요청 묶어서 처리
+
+### 보안 고려사항
+
+1. **API 키 보안**: 환경변수나 보안 저장소 사용
+2. **입력 검증**: 사용자 입력 검증 및 필터링
+3. **민감 정보**: 개인정보나 기밀 데이터 처리 주의
+4. **Rate Limiting**: 적절한 요청 제한 구현
+
+```python
+import os
+from google import genai
+
+# API 키 보안 설정
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+# 입력 검증 예시
+def validate_input(user_input: str) -> bool:
+    if len(user_input) > 10000:  # 토큰 제한
+        return False
+    if any(word in user_input.lower() for word in ["password", "secret"]):
+        return False
+    return True
+```
+
+### 성능 최적화
+
+1. **스트리밍 사용**: 긴 응답의 경우 스트리밍 활용
+2. **비동기 처리**: async/await 패턴 사용
+3. **연결 재사용**: 클라이언트 인스턴스 재활용
+4. **적절한 타임아웃**: 요청 타임아웃 설정
+
+```python
+import asyncio
+from google import genai
+
+# 비동기 클라이언트
+async def process_multiple_requests(requests):
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    
+    tasks = []
+    for request in requests:
+        task = client.aio.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=request
+        )
+        tasks.append(task)
+    
+    results = await asyncio.gather(*tasks)
+    return results
+```
+
+---
+
+이 가이드를 통해 Gemini API의 다양한 기능을 효과적으로 활용하실 수 있습니다. 각 기능별로 적절한 모델과 설정을 선택하여 최적의 결과를 얻으시기 바랍니다.

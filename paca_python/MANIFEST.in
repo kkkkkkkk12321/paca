@@ -1,0 +1,48 @@
+# PACA v5 Python Edition - Package Manifest
+
+# Documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+
+# Requirements
+include requirements.txt
+include pyproject.toml
+
+# Configuration files
+recursive-include paca/config *.yaml *.json *.toml
+recursive-include desktop_app/assets *
+
+# Type stubs
+recursive-include paca *.py *.pyi
+include paca/py.typed
+
+# Scripts
+recursive-include scripts *.py
+
+# Tests (exclude from wheel)
+recursive-exclude tests *
+recursive-exclude tests/integration *
+recursive-exclude tests/performance *
+
+# Build artifacts (exclude)
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .coverage
+global-exclude *.so
+global-exclude *.dylib
+global-exclude *.dll
+
+# IDE files (exclude)
+global-exclude .vscode
+global-exclude .idea
+global-exclude *.swp
+global-exclude *.swo
+global-exclude *~
+
+# Git files (exclude)
+global-exclude .git*
+global-exclude .DS_Store

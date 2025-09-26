@@ -1,0 +1,319 @@
+/*
+ * PACA Desktop Application - Dark Theme
+ * Generated automatically by ThemeGenerator
+ *
+ * This file contains all design tokens and component styles
+ * for the dark theme of PACA desktop application.
+ */
+
+:root {
+  --paca-color-primary: #64B5F6;
+  --paca-color-primary-dark: #42A5F5;
+  --paca-color-primary-light: #90CAF9;
+  --paca-color-secondary: #FFD54F;
+  --paca-color-secondary-dark: #FFCA28;
+  --paca-color-secondary-light: #FFE082;
+  --paca-color-background: #121212;
+  --paca-color-surface: #1E1E1E;
+  --paca-color-card: #2D2D2D;
+  --paca-color-header: #1F1F1F;
+  --paca-color-sidebar: #1A1A1A;
+  --paca-color-text-primary: #FFFFFF;
+  --paca-color-text-secondary: #BBBBBB;
+  --paca-color-text-disabled: #666666;
+  --paca-color-text-hint: #888888;
+  --paca-color-success: #81C784;
+  --paca-color-warning: #FFB74D;
+  --paca-color-error: #E57373;
+  --paca-color-info: #64B5F6;
+  --paca-color-hover: #333333;
+  --paca-color-active: #404040;
+  --paca-color-focus: #1A237E;
+  --paca-color-disabled: #333333;
+  --paca-color-border: #404040;
+  --paca-color-border-light: #555555;
+  --paca-color-border-dark: #2D2D2D;
+  --paca-color-divider: #404040;
+  --paca-color-shadow: rgba(0, 0, 0, 0.5);
+  --paca-color-shadow-light: rgba(0, 0, 0, 0.3);
+  --paca-color-shadow-dark: rgba(0, 0, 0, 0.7);
+  --paca-font-primary: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --paca-font-secondary: 'Segoe UI', 'Roboto', sans-serif;
+  --paca-font-monospace: 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+  --paca-font-size-xs: 0.75rem;
+  --paca-font-size-sm: 0.875rem;
+  --paca-font-size-md: 1rem;
+  --paca-font-size-lg: 1.125rem;
+  --paca-font-size-xl: 1.25rem;
+  --paca-font-size-2xl: 1.5rem;
+  --paca-font-weight-light: 300;
+  --paca-font-weight-normal: 400;
+  --paca-font-weight-medium: 500;
+  --paca-font-weight-bold: 600;
+  --paca-line-height-xs: 1.2;
+  --paca-line-height-sm: 1.3;
+  --paca-line-height-md: 1.4;
+  --paca-line-height-lg: 1.6;
+  --paca-spacing-xs: 0.25rem;
+  --paca-spacing-sm: 0.5rem;
+  --paca-spacing-md: 1rem;
+  --paca-spacing-lg: 1.5rem;
+  --paca-spacing-xl: 2rem;
+  --paca-spacing-xxl: 3rem;
+  --paca-radius-xs: 0.125rem;
+  --paca-radius-sm: 0.25rem;
+  --paca-radius-md: 0.5rem;
+  --paca-radius-lg: 0.75rem;
+  --paca-radius-xl: 1rem;
+  --paca-width-thin: 1px;
+  --paca-width-normal: 2px;
+  --paca-width-thick: 3px;
+  --paca-duration-fast: 150ms;
+  --paca-duration-normal: 300ms;
+  --paca-duration-slow: 500ms;
+  --paca-easing-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --paca-easing-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --paca-easing-accelerate: cubic-bezier(0.4, 0.0, 1, 1);
+}
+
+
+/* Application Layout */
+.paca-app {
+  background-color: var(--paca-color-background);
+  color: var(--paca-color-text-primary);
+  font-family: var(--paca-font-primary);
+  font-size: var(--paca-font-size-md);
+  line-height: var(--paca-line-height-md);
+}
+
+.paca-header {
+  background-color: var(--paca-color-header);
+  border-bottom: var(--paca-width-thin) solid var(--paca-color-border);
+  padding: var(--paca-spacing-md);
+  box-shadow: 0 2px 4px var(--paca-color-shadow-light);
+}
+
+.paca-sidebar {
+  background-color: var(--paca-color-sidebar);
+  border-right: var(--paca-width-thin) solid var(--paca-color-border);
+  padding: var(--paca-spacing-lg);
+}
+
+.paca-main-content {
+  background-color: var(--paca-color-background);
+  padding: var(--paca-spacing-lg);
+}
+
+/* Cards and Surfaces */
+.paca-card {
+  background-color: var(--paca-color-card);
+  border: var(--paca-width-thin) solid var(--paca-color-border);
+  border-radius: var(--paca-radius-md);
+  box-shadow: 0 2px 8px var(--paca-color-shadow-light);
+  padding: var(--paca-spacing-lg);
+  transition: box-shadow var(--paca-duration-normal) var(--paca-easing-standard);
+}
+
+.paca-card:hover {
+  box-shadow: 0 4px 12px var(--paca-color-shadow);
+}
+
+.paca-surface {
+  background-color: var(--paca-color-surface);
+  border-radius: var(--paca-radius-sm);
+}
+
+/* Buttons */
+.paca-button {
+  background-color: var(--paca-color-primary);
+  color: var(--paca-color-surface);
+  border: none;
+  border-radius: var(--paca-radius-sm);
+  padding: var(--paca-spacing-sm) var(--paca-spacing-md);
+  font-family: var(--paca-font-primary);
+  font-size: var(--paca-font-size-md);
+  font-weight: var(--paca-font-weight-medium);
+  cursor: pointer;
+  transition: all var(--paca-duration-fast) var(--paca-easing-standard);
+}
+
+.paca-button:hover {
+  background-color: var(--paca-color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--paca-color-shadow);
+}
+
+.paca-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px var(--paca-color-shadow);
+}
+
+.paca-button:focus {
+  outline: 2px solid var(--paca-color-focus);
+  outline-offset: 2px;
+}
+
+.paca-button:disabled {
+  background-color: var(--paca-color-disabled);
+  color: var(--paca-color-text-disabled);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.paca-button-secondary {
+  background-color: var(--paca-color-secondary);
+  color: var(--paca-color-text-primary);
+}
+
+.paca-button-secondary:hover {
+  background-color: var(--paca-color-secondary-dark);
+}
+
+.paca-button-outline {
+  background-color: transparent;
+  color: var(--paca-color-primary);
+  border: var(--paca-width-normal) solid var(--paca-color-primary);
+}
+
+.paca-button-outline:hover {
+  background-color: var(--paca-color-primary);
+  color: var(--paca-color-surface);
+}
+
+/* Input Fields */
+.paca-input {
+  background-color: var(--paca-color-surface);
+  color: var(--paca-color-text-primary);
+  border: var(--paca-width-thin) solid var(--paca-color-border);
+  border-radius: var(--paca-radius-sm);
+  padding: var(--paca-spacing-sm) var(--paca-spacing-md);
+  font-family: var(--paca-font-primary);
+  font-size: var(--paca-font-size-md);
+  transition: border-color var(--paca-duration-fast) var(--paca-easing-standard);
+}
+
+.paca-input:focus {
+  outline: none;
+  border-color: var(--paca-color-primary);
+  box-shadow: 0 0 0 3px var(--paca-color-focus);
+}
+
+.paca-input:disabled {
+  background-color: var(--paca-color-disabled);
+  color: var(--paca-color-text-disabled);
+  cursor: not-allowed;
+}
+
+.paca-input::placeholder {
+  color: var(--paca-color-text-hint);
+}
+
+/* Status Indicators */
+.paca-status-success {
+  color: var(--paca-color-success);
+}
+
+.paca-status-warning {
+  color: var(--paca-color-warning);
+}
+
+.paca-status-error {
+  color: var(--paca-color-error);
+}
+
+.paca-status-info {
+  color: var(--paca-color-info);
+}
+
+/* Navigation */
+.paca-nav-item {
+  display: flex;
+  align-items: center;
+  padding: var(--paca-spacing-sm) var(--paca-spacing-md);
+  margin-bottom: var(--paca-spacing-xs);
+  border-radius: var(--paca-radius-sm);
+  color: var(--paca-color-text-secondary);
+  text-decoration: none;
+  transition: all var(--paca-duration-fast) var(--paca-easing-standard);
+}
+
+.paca-nav-item:hover {
+  background-color: var(--paca-color-hover);
+  color: var(--paca-color-text-primary);
+}
+
+.paca-nav-item.active {
+  background-color: var(--paca-color-primary);
+  color: var(--paca-color-surface);
+}
+
+/* Scrollbars */
+.paca-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.paca-scrollbar::-webkit-scrollbar-track {
+  background-color: var(--paca-color-background);
+}
+
+.paca-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--paca-color-border);
+  border-radius: var(--paca-radius-sm);
+}
+
+.paca-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--paca-color-border-dark);
+}
+
+/* Dividers */
+.paca-divider {
+  border: none;
+  height: var(--paca-width-thin);
+  background-color: var(--paca-color-divider);
+  margin: var(--paca-spacing-md) 0;
+}
+
+/* Loading States */
+.paca-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.paca-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--paca-color-border);
+  border-top: 2px solid var(--paca-color-primary);
+  border-radius: 50%;
+  animation: paca-spin var(--paca-duration-slow) linear infinite;
+}
+
+@keyframes paca-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .paca-card {
+    padding: var(--paca-spacing-md);
+    margin: var(--paca-spacing-sm);
+  }
+
+  .paca-button {
+    padding: var(--paca-spacing-md) var(--paca-spacing-lg);
+    font-size: var(--paca-font-size-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .paca-header {
+    padding: var(--paca-spacing-sm);
+  }
+
+  .paca-main-content {
+    padding: var(--paca-spacing-md);
+  }
+}

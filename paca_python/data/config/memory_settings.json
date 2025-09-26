@@ -1,0 +1,25 @@
+{
+  "working_memory": {
+    "working_memory_capacity": 12,
+    "working_memory_ttl_seconds": 900,
+    "cleanup_interval_seconds": 120,
+    "ttl_disabled_fallback": true
+  },
+  "episodic_memory": {
+    "retention_days": 30,
+    "snapshot_interval_seconds": 1800,
+    "enable_async_io": true,
+    "max_snapshot_items": 150
+  },
+  "long_term_memory": {
+    "cleanup_policy": "priority",
+    "max_items": 5000,
+    "min_strength_threshold": 0.05,
+    "max_idle_seconds": 2592000,
+    "cleanup_batch_size": 250,
+    "persistent_db": true,
+    "database_name": "longterm_memory.db",
+    "storage_adapter": "sqlite",
+    "connection_uri": null
+  }
+}

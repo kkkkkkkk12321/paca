@@ -1,0 +1,18 @@
+{
+  "start_time": "2025-09-23T02:46:05.352846",
+  "tests": {
+    "react_framework": {
+      "status": "PASS",
+      "session_id": "7db7c781-bad1-46d0-bba5-d16dfd13998e",
+      "steps_count": 3,
+      "message": "ReAct 프레임워크가 정상적으로 작동함"
+    },
+    "web_search_tool": {
+      "status": "PASS",
+      "results_count": 3,
+      "verification_confidence": 1.0,
+      "message": "웹 검색 도구가 정상적으로 작동함"
+    },
+    "file_manager_tool": {
+      "status": "PASS",
+      "sandbox_path": 

@@ -1,0 +1,72 @@
+{
+  "theme_system": {
+    "version": "1.0.0",
+    "description": "PACA Desktop Application Theme Configuration",
+    "supported_themes": [
+      "light",
+      "dark",
+      "custom"
+    ]
+  },
+  "color_categories": {
+    "primary": [
+      "primary",
+      "primary-dark",
+      "primary-light"
+    ],
+    "secondary": [
+      "secondary",
+      "secondary-dark",
+      "secondary-light"
+    ],
+    "background": [
+      "background",
+      "surface",
+      "card",
+      "header",
+      "sidebar"
+    ],
+    "text": [
+      "text-primary",
+      "text-secondary",
+      "text-disabled",
+      "text-hint"
+    ],
+    "state": [
+      "success",
+      "warning",
+      "error",
+      "info"
+    ],
+    "interactive": [
+      "hover",
+      "active",
+      "focus",
+      "disabled"
+    ],
+    "border": [
+      "border",
+      "border-light",
+      "border-dark",
+      "divider"
+    ],
+    "shadow": [
+      "shadow",
+      "shadow-light",
+      "shadow-dark"
+    ]
+  },
+  "custom_theme_instructions": [
+    "1. Copy custom-template.css to create your custom theme",
+    "2. Replace placeholder values with your color choices",
+    "3. Ensure sufficient contrast for accessibility",
+    "4. Test your theme with the PACA application",
+    "5. Save your theme file in the custom themes folder"
+  ],
+  "accessibility_guidelines": {
+    "contrast_ratio_normal": 4.5,
+    "contrast_ratio_large": 3.0,
+    "focus_indicators": "Always provide visible focus indicators",
+    "color_independence": "Do not rely solely on color to convey information"
+  }
+}

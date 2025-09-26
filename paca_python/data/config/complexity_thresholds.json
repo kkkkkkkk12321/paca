@@ -1,0 +1,64 @@
+{
+  "complexity": {
+    "reasoning_threshold": 48,
+    "feature_weights": {
+      "keyword": 0.32,
+      "structure": 0.23,
+      "domain": 0.22,
+      "reasoning": 0.23
+    },
+    "level_thresholds": {
+      "SIMPLE": [0, 24],
+      "MODERATE": [25, 49],
+      "COMPLEX": [50, 74],
+      "VERY_COMPLEX": [75, 89],
+      "EXTREME": [90, 100]
+    },
+    "pattern_weights": {
+      "multi_question": 18,
+      "conditional": 14,
+      "comparison": 12,
+      "sequence": 10,
+      "analysis": 18,
+      "complex_grammar": 12,
+      "technical_terms": 16,
+      "korean_honorific": -8
+    },
+    "reasoning_indicators": {
+      "왜": 25,
+      "어떻게": 22,
+      "원인": 24,
+      "결과": 20,
+      "이유": 22,
+      "방법": 16,
+      "과정": 15,
+      "단계": 14,
+      "분석": 22,
+      "예측": 20,
+      "추론": 26,
+      "결론": 22
+    },
+    "question_tokens": ["?", "？", "무엇", "왜", "어떻게", "궁금", "알고싶", "모르겠", "가능할까"],
+    "cache": {
+      "enabled": true,
+      "ttl_seconds": 420,
+      "max_entries": 60
+    }
+  },
+  "metacognition": {
+    "quality_thresholds": {
+      "green": 82,
+      "yellow": 65,
+      "red": 45
+    },
+    "high_complexity_score": 72,
+    "low_confidence": 0.48,
+    "alerts": {
+      "high_complexity_score": 72,
+      "low_confidence": 0.48
+    },
+    "logging_enabled": true,
+    "log_directory": "logs/metacognition",
+    "max_history_size": 150
+  }
+}

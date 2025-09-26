@@ -1,0 +1,132 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paca-v5"
+version = "5.0.0"
+description = "Personal AI Cognitive Assistant v5 - Python Edition"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "PACA Team", email = "team@paca.ai"}
+]
+keywords = ["ai", "cognitive", "korean-nlp", "assistant", "reasoning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+requires-python = ">=3.9"
+dependencies = [
+    "customtkinter>=5.0.0",
+    "konlpy>=0.6.0",
+    "transformers>=4.20.0",
+    "google-generativeai>=0.3.0",
+    "pydantic>=2.0.0",
+    "asyncio-mqtt>=0.11.0",
+    "toolz>=0.12.0",
+    "numpy>=1.21.0",
+    "pandas>=1.5.0",
+    "pystray>=0.19.0",
+    "aiofiles>=23.0.0",
+    "aiosqlite>=0.19.0",
+    "jsonschema>=4.0.0",
+    "python-dateutil>=2.8.0",
+    "typing-extensions>=4.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.0.0",
+    "pre-commit>=3.0.0"
+]
+
+gui = [
+    "customtkinter>=5.0.0",
+    "pystray>=0.19.0",
+    "Pillow>=9.0.0"
+]
+
+nlp = [
+    "konlpy>=0.6.0",
+    "transformers>=4.20.0",
+    "torch>=1.13.0",
+    "sentencepiece>=0.1.99"
+]
+
+[project.urls]
+Homepage = "https://github.com/paca-team/paca-python"
+Repository = "https://github.com/paca-team/paca-python.git"
+Documentation = "https://paca-python.readthedocs.io"
+"Bug Tracker" = "https://github.com/paca-team/paca-python/issues"
+
+[project.scripts]
+paca = "paca.cli:main"
+paca-gui = "desktop_app.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["paca*"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+show_error_codes = true
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["konlpy.*", "transformers.*", "customtkinter.*", "pystray.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=paca --cov-report=html --cov-report=term-missing"
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["paca"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503", "E501"]
+exclude = [".git", "__pycache__", "dist", "build"]
