@@ -595,46 +595,46 @@ class PacaSystem:
         return summary
 
     async def _generate_basic_response(self, message: str, user_id: str) -> str:
-        """기본 응답 생성 (임시 구현)"""
-        message_lower = message.lower()
+        """기본 응답: LLM 우선 + 429(쿼터초과) 재시도/명확 안내"""
+        import asyncio
+        import re
 
-        greetings = ["안녕", "하이", "헬로"]
-        gratitude = ["고마워", "감사", "땡큐"]
+        attempts = 3
+        backoff = 0.6  # seconds
 
-        if any(word in message for word in greetings):
-            return "안녕하세요! PACA입니다. 무엇을 도와드릴까요?"
-        if any(word in message for word in gratitude):
-            return "천만에요! 더 필요한 것이 있으면 언제든지 말씀해주세요."
-        if "학습" in message or "공부" in message:
-            return "학습에 대해 궁금하신 것이 있으시군요. 어떤 주제를 공부하고 싶으신가요?"
-        if "파이썬" in message_lower:
-            return "파이썬 학습을 도와드리겠습니다! 기초부터 시작하실까요, 아니면 특정 주제가 있으신가요?"
-        if "javascript" in message_lower or "자바스크립트" in message:
-            return "자바스크립트 공부하시는군요! 어떤 부분이 궁금하신지 알려주세요."
+        for i in range(1, attempts + 1):
+            try:
+                # 프로젝트의 표준 LLM 파이프라인을 그대로 사용
+                return await self._generate_llm_response(
+                    cognitive_data={},                 # 최소 컨텍스트
+                    original_message=message,
+                    context={"user_id": user_id}
+                )
+            except Exception as e:
+                s = str(e)
+                is_429 = (
+                    "RESOURCE_EXHAUSTED" in s
+                    or "429" in s
+                    or re.search(r"\brate[- ]?limit\b", s, re.IGNORECASE)
+                )
 
-        return f"'{message}'에 대해 이해했습니다. 더 구체적으로 설명해주시면 더 도움이 될 것 같아요!"
+                # 429면 짧게 재시도
+                if is_429 and i < attempts:
+                    await asyncio.sleep(backoff)
+                    backoff *= 1.8
+                    continue
 
-    def _generate_response(self, cognitive_data: Dict[str, Any], original_message: str) -> str:
-        """인지 처리 결과를 바탕으로 응답 생성"""
-        # 기본 응답 생성 로직
-        confidence = cognitive_data.get("confidence", 0.5)
+                # 재시도 후에도 429면 쿼터 초과를 명확히 안내
+                if is_429:
+                    return (
+                        "지금 LLM 제공자 쿼터(요청 제한)를 초과해 응답을 만들 수 없어요. "
+                        "잠시 뒤 다시 시도하거나, 다른 모델/키로 전환해주세요."
+                    )
 
-        if confidence > 0.8:
-            base_response = "네, 이해했습니다. "
-        elif confidence > 0.5:
-            base_response = "제가 이해한 바로는 "
-        else:
-            base_response = "죄송하지만 명확하게 이해하지 못했습니다. "
+                # 그 외 에러는 짧은 안내
+                return "죄송해요, 잠시 문제가 생겼어요. 다시 한 번 시도해 주세요."
 
-        # 간단한 응답 생성 (실제로는 더 복잡한 NLG 시스템 필요)
-        if "안녕" in original_message:
-            return "안녕하세요! PACA AI 어시스턴트입니다. 무엇을 도와드릴까요?"
-        elif "계산" in original_message or any(char.isdigit() for char in original_message):
-            return base_response + "수학적 계산을 도와드릴 수 있습니다. 구체적인 식을 알려주세요."
-        elif "?" in original_message or "질문" in original_message:
-            return base_response + "질문에 대해 생각해보고 답변드리겠습니다."
-        else:
-            return base_response + "말씀하신 내용에 대해 더 자세히 설명해 주시면 도움을 드릴 수 있습니다."
+
 
     async def _apply_learning_feedback(
         self,
@@ -935,12 +935,22 @@ class PacaSystem:
                     return result.data.text
 
             else:
+                err = str(result.error or "")
+                # 429 / RATE LIMIT은 예외로 올려서 basic_response의 재시도가 작동하게 한다
+                if "RESOURCE_EXHAUSTED" in err or "429" in err or "rate limit" in err.lower():
+                    raise RuntimeError(f"LLM_RATE_LIMIT: {err}")
                 self.logger.error(f"LLM 응답 생성 실패: {result.error}")
                 return self._generate_fallback_response(cognitive_data, original_message)
 
+
         except Exception as e:
-            self.logger.error(f"LLM 응답 생성 중 오류: {str(e)}", error=e)
+            s = str(e)
+            if "RESOURCE_EXHAUSTED" in s or "429" in s or "rate limit" in s.lower():
+                # 429는 위로 던져서 _generate_basic_response의 재시도/안내 로직이 처리하게 함
+                raise
+            self.logger.error(f"LLM 응답 생성 중 오류: {s}", error=e)
             return self._generate_fallback_response(cognitive_data, original_message)
+
 
     def _build_system_prompt(self, cognitive_data: Dict[str, Any], context: Dict[str, Any]) -> str:
         """시스템 프롬프트 구성"""

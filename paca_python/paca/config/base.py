@@ -289,7 +289,40 @@ class ConfigManager:
                 }
             }
 
+            # 기본 네임스페이스 보관(기존 인터페이스 유지)
             self.configs.setdefault("default", default_config)
+
+            # === [핵심 패치] 기본값을 외부로 노출 + 호환키 + ENV 키 반영 ===
+            # 1) 최종 config를 외부에서 접근 가능하게 노출
+            self.config = dict(default_config)
+
+            # 2) 학습/메타인지 호환 키 제공 (enabled로도 접근 가능)
+            learning = self.config.get("learning", {})
+            if "enabled" not in learning:
+                learning["enabled"] = bool(learning.get("enable_auto_learning", True))
+            self.config["learning"] = learning
+
+            cognitive = self.config.get("cognitive", {})
+            metacog_enabled = bool(cognitive.get("enable_metacognition", True))
+            # metacognition.enabled 미러링
+            self.config["metacognition"] = {
+                "enabled": metacog_enabled,
+                **self.config.get("metacognition", {})
+            }
+
+            # 3) ENV에서 GEMINI_API_KEYS="k1,k2,..." 읽어오면 우선 적용
+            import os
+            env_keys = [k.strip() for k in os.getenv("GEMINI_API_KEYS", "").split(",") if k.strip()]
+            if env_keys:
+                self.config["llm"]["api_keys"] = env_keys
+
+            # 4) llm 모델/키가 비면 기본값 보강
+            if not self.config["llm"].get("models"):
+                self.config["llm"]["models"] = default_config["llm"]["models"]
+            if not self.config["llm"].get("api_keys"):
+                self.config["llm"]["api_keys"] = default_config["llm"]["api_keys"]
+            # === [핵심 패치 끝] ===
+
             self._is_initialized = True
             return Result.success(True)
 
