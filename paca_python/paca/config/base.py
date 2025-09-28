@@ -3,6 +3,7 @@ Config Base Module
 설정 관리 기본 클래스들
 """
 
+import copy
 import json
 import os
 import yaml
@@ -277,11 +278,7 @@ class ConfigManager:
                             "gemini-2.0-flash-preview-image-generation"
                         ]
                     },
-                    "api_keys": [
-                        "AIzaSyBNsviO1QfFcqKfeqVdvUzIk6bQ2McCk00",
-                        "AIzaSyDxipPbvDUBQZlLucC8yTqLEc9D-HnqhLw",
-                        "AIzaSyBhYUTppmklAYspJgK81w57BbEMgan7YkQ"
-                    ],
+                    "api_keys": [],
                     "rotation": {
                         "strategy": "round_robin",
                         "min_interval_seconds": 1.0
@@ -290,13 +287,11 @@ class ConfigManager:
             }
 
             # 기본 네임스페이스 보관(기존 인터페이스 유지)
-            self.configs.setdefault("default", default_config)
+            base_config = copy.deepcopy(default_config)
+            self.config = base_config
+            self.configs["default"] = self.config
 
-            # === [핵심 패치] 기본값을 외부로 노출 + 호환키 + ENV 키 반영 ===
-            # 1) 최종 config를 외부에서 접근 가능하게 노출
-            self.config = dict(default_config)
-
-            # 2) 학습/메타인지 호환 키 제공 (enabled로도 접근 가능)
+            # 기본 설정 후처리: 학습/메타인지 호환 키 제공
             learning = self.config.get("learning", {})
             if "enabled" not in learning:
                 learning["enabled"] = bool(learning.get("enable_auto_learning", True))
@@ -310,18 +305,16 @@ class ConfigManager:
                 **self.config.get("metacognition", {})
             }
 
-            # 3) ENV에서 GEMINI_API_KEYS="k1,k2,..." 읽어오면 우선 적용
-            import os
+            # 환경 변수에서 GEMINI_API_KEYS="k1,k2,..." 읽어오면 우선 적용
             env_keys = [k.strip() for k in os.getenv("GEMINI_API_KEYS", "").split(",") if k.strip()]
             if env_keys:
                 self.config["llm"]["api_keys"] = env_keys
 
-            # 4) llm 모델/키가 비면 기본값 보강
+            # llm 모델/키가 비면 기본값 보강
             if not self.config["llm"].get("models"):
-                self.config["llm"]["models"] = default_config["llm"]["models"]
+                self.config["llm"]["models"] = copy.deepcopy(default_config["llm"]["models"])
             if not self.config["llm"].get("api_keys"):
-                self.config["llm"]["api_keys"] = default_config["llm"]["api_keys"]
-            # === [핵심 패치 끝] ===
+                self.config["llm"]["api_keys"] = copy.deepcopy(default_config["llm"]["api_keys"])
 
             self._is_initialized = True
             return Result.success(True)

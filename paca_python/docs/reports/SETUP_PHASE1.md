@@ -17,6 +17,8 @@ pip install -r requirements.txt
 
 ### 2. Gemini API 키 설정
 
+> ℹ️ 기본 설정에는 API 키가 포함되지 않습니다. 운영 환경에서는 반드시 환경 변수나 `.env` 파일을 통해 키를 주입하세요.
+
 #### 방법 1: 환경변수 (권장)
 ```bash
 # Windows

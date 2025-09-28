@@ -58,6 +58,8 @@ response = await manager.generate_text(
 ## 🏃‍♂️ 실행 방법
 ```bash
 # 환경 변수 설정
+# ConfigManager 기본 설정에는 API 키가 포함되어 있지 않으므로,
+# 실제 키는 환경 변수나 별도의 설정 파일(.env 등)을 통해 주입해야 합니다.
 export GEMINI_API_KEYS="your_gemini_api_key"
 export OPENAI_API_KEY="your_openai_api_key"
 
