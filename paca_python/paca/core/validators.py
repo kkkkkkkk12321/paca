@@ -7,7 +7,9 @@ import re
 import json
 from typing import Any, Optional, Dict, List, TypeVar, Union, Type
 from urllib.parse import urlparse
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
 from paca.core.types import ID, KeyValuePair
 from paca.core.constants import MEMORY_LIMITS, FILE_SIZE_LIMITS, RATE_LIMITS
 
@@ -21,9 +23,31 @@ class IdValidator(BaseModel):
     """ID 형식 검증을 위한 Pydantic 모델"""
     id: str = Field(..., min_length=1, max_length=255, description="유효한 ID")
 
+EMAIL_REGEX = re.compile(
+    r"^(?P<local>[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+)@"
+    r"(?P<domain>[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)$"
+)
+
+
 class EmailValidator(BaseModel):
     """이메일 형식 검증을 위한 Pydantic 모델"""
-    email: EmailStr = Field(..., max_length=254, description="유효한 이메일 주소")
+
+    email: str = Field(..., max_length=254, description="유효한 이메일 주소")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("이메일 주소는 문자열이어야 합니다")
+
+        if len(value) > 254:
+            raise ValueError("이메일 주소가 너무 깁니다")
+
+        if not EMAIL_REGEX.match(value):
+            raise ValueError("유효하지 않은 이메일 주소 형식입니다")
+
+        return value
 
 class UrlValidator(BaseModel):
     """URL 형식 검증을 위한 Pydantic 모델"""

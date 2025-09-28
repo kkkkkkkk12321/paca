@@ -3,13 +3,98 @@ Calculator Module
 고급 수학 계산 엔진
 """
 
-import numpy as np
-import sympy as sp
-from typing import Union, List, Dict, Any, Optional
-import statistics
+from __future__ import annotations
 
+import ast
+import math
+import operator
+import statistics
+from typing import Any, Callable, Dict, List, Optional, Union
+
+import numpy as np
+
+from ..core.errors.base import PacaError, ValidationError
 from ..core.types.base import Result
-from ..core.errors.base import ValidationError, PacaError
+
+try:  # pragma: no cover - optional dependency handling
+    import sympy as sp
+
+    SYMPY_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised when sympy missing
+    sp = None  # type: ignore
+    SYMPY_AVAILABLE = False
+
+
+SAFE_BINARY_OPERATORS: Dict[type, Callable[[Any, Any], Any]] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+
+SAFE_UNARY_OPERATORS: Dict[type, Callable[[Any], Any]] = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+SAFE_FUNCTIONS: Dict[str, Any] = {
+    name: getattr(math, name)
+    for name in dir(math)
+    if not name.startswith("_")
+}
+SAFE_FUNCTIONS.update({"abs": abs, "round": round, "min": min, "max": max})
+
+
+def _evaluate_ast(node: ast.AST, variables: Dict[str, Any]) -> Any:
+    """Safely evaluate a parsed AST expression."""
+
+    if isinstance(node, ast.Expression):
+        return _evaluate_ast(node.body, variables)
+
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)):
+            return node.value
+        raise ValueError("허용되지 않은 상수 타입입니다")
+
+    if isinstance(node, ast.Num):  # pragma: no cover - Python <3.8 compatibility
+        return node.n
+
+    if isinstance(node, ast.BinOp):
+        operator_type = type(node.op)
+        if operator_type not in SAFE_BINARY_OPERATORS:
+            raise ValueError("지원하지 않는 이항 연산자입니다")
+        left = _evaluate_ast(node.left, variables)
+        right = _evaluate_ast(node.right, variables)
+        return SAFE_BINARY_OPERATORS[operator_type](left, right)
+
+    if isinstance(node, ast.UnaryOp):
+        operator_type = type(node.op)
+        if operator_type not in SAFE_UNARY_OPERATORS:
+            raise ValueError("지원하지 않는 단항 연산자입니다")
+        operand = _evaluate_ast(node.operand, variables)
+        return SAFE_UNARY_OPERATORS[operator_type](operand)
+
+    if isinstance(node, ast.Name):
+        if node.id in variables:
+            return variables[node.id]
+        if node.id in SAFE_FUNCTIONS:
+            return SAFE_FUNCTIONS[node.id]
+        raise ValueError(f"허용되지 않은 식별자: {node.id}")
+
+    if isinstance(node, ast.Call):
+        func = _evaluate_ast(node.func, variables)
+        if func not in SAFE_FUNCTIONS.values():
+            raise ValueError("허용되지 않는 함수 호출입니다")
+        args = [_evaluate_ast(arg, variables) for arg in node.args]
+        return func(*args)
+
+    if isinstance(node, ast.Subscript):
+        raise ValueError("첨자 연산은 허용되지 않습니다")
+
+    raise ValueError("지원하지 않는 표현식입니다")
 
 
 class Calculator:
@@ -19,6 +104,15 @@ class Calculator:
         self.precision = precision
         self.symbolic_engine = sp
         self.numeric_engine = np
+
+    def _sympy_required_failure(self, feature: str) -> Result[Any]:
+        """Sympy가 필요한 기능의 에러 메시지를 생성"""
+
+        message = (
+            f"{feature} 기능을 사용하려면 'sympy' 패키지가 필요합니다. "
+            "`pip install sympy` 명령으로 설치한 후 다시 시도하세요."
+        )
+        return Result.failure(PacaError(message))
 
     def add(self, a: float, b: float) -> float:
         """덧셈"""
@@ -58,22 +152,25 @@ class Calculator:
             if not expression:
                 return Result.failure(ValidationError("Expression cannot be empty"))
 
-            # 1. 표현식 파싱
-            parsed_expr = self.symbolic_engine.sympify(expression)
+            variables = variables or {}
 
-            # 2. 변수가 있는 경우 대입
-            if variables:
+            if SYMPY_AVAILABLE and self.symbolic_engine is not None:
+                parsed_expr = self.symbolic_engine.sympify(expression)
+
                 for var, value in variables.items():
                     parsed_expr = parsed_expr.subs(var, value)
 
-            # 3. 수치 계산 시도
-            try:
-                numeric_result = float(parsed_expr.evalf(self.precision))
-                return Result.success(numeric_result)
-            except (TypeError, ValueError):
-                # 기호 계산 결과 반환
-                symbolic_result = str(parsed_expr)
-                return Result.success(symbolic_result)
+                try:
+                    numeric_result = float(parsed_expr.evalf(self.precision))
+                    return Result.success(numeric_result)
+                except (TypeError, ValueError):
+                    symbolic_result = str(parsed_expr)
+                    return Result.success(symbolic_result)
+
+            # Fallback: 안전한 AST 기반 계산
+            parsed = ast.parse(expression, mode="eval")
+            evaluated = _evaluate_ast(parsed.body, variables)
+            return Result.success(float(evaluated))
 
         except Exception as e:
             return Result.failure(PacaError(f"Calculation error: {str(e)}"))
@@ -87,6 +184,9 @@ class Calculator:
         try:
             if not equation or not variable:
                 return Result.failure(ValidationError("Equation and variable are required"))
+
+            if not SYMPY_AVAILABLE or self.symbolic_engine is None:
+                return self._sympy_required_failure("방정식 풀이")
 
             # 등호가 있는 경우 처리
             if '=' in equation:
@@ -131,6 +231,9 @@ class Calculator:
             if order < 1:
                 return Result.failure(ValidationError("Order must be positive"))
 
+            if not SYMPY_AVAILABLE or self.symbolic_engine is None:
+                return self._sympy_required_failure("도함수 계산")
+
             expr = self.symbolic_engine.sympify(expression)
             var = self.symbolic_engine.Symbol(variable)
 
@@ -153,6 +256,9 @@ class Calculator:
         try:
             if not expression or not variable:
                 return Result.failure(ValidationError("Expression and variable are required"))
+
+            if not SYMPY_AVAILABLE or self.symbolic_engine is None:
+                return self._sympy_required_failure("적분 계산")
 
             expr = self.symbolic_engine.sympify(expression)
             var = self.symbolic_engine.Symbol(variable)
@@ -180,6 +286,9 @@ class Calculator:
             if not expression:
                 return Result.failure(ValidationError("Expression cannot be empty"))
 
+            if not SYMPY_AVAILABLE or self.symbolic_engine is None:
+                return self._sympy_required_failure("인수분해")
+
             expr = self.symbolic_engine.sympify(expression)
             factored = self.symbolic_engine.factor(expr)
             result = str(factored)
@@ -195,6 +304,9 @@ class Calculator:
             if not expression:
                 return Result.failure(ValidationError("Expression cannot be empty"))
 
+            if not SYMPY_AVAILABLE or self.symbolic_engine is None:
+                return self._sympy_required_failure("전개")
+
             expr = self.symbolic_engine.sympify(expression)
             expanded = self.symbolic_engine.expand(expr)
             result = str(expanded)
@@ -209,6 +321,9 @@ class Calculator:
         try:
             if not expression:
                 return Result.failure(ValidationError("Expression cannot be empty"))
+
+            if not SYMPY_AVAILABLE or self.symbolic_engine is None:
+                return self._sympy_required_failure("식 단순화")
 
             expr = self.symbolic_engine.sympify(expression)
             simplified = self.symbolic_engine.simplify(expr)
