@@ -1000,22 +1000,44 @@ class PacaSystem:
         """LLM 없이 기본 응답 생성 (백업용)"""
         confidence = cognitive_data.get("confidence", 0.5)
 
+        message = (original_message or "").strip()
+        normalized = message.replace(" ", "")
+        normalized_lower = normalized.lower()
+
+        if not message:
+            return "안녕하세요! PACA AI 어시스턴트입니다. 무엇을 도와드릴까요?"
+
+        if any(trigger in normalized for trigger in ("안녕", "반가워", "hello", "hi")):
+            return "안녕하세요! PACA AI 어시스턴트입니다. 무엇을 도와드릴까요?"
+
+        gratitude_triggers = ("고마워", "고맙", "감사", "thankyou", "thanks")
+        if any(trigger in normalized_lower for trigger in gratitude_triggers):
+            return "천만에요! 언제든지 도와드릴게요."
+
+        study_triggers = ("공부", "학습", "배워", "study")
+        help_triggers = ("도와줘", "도와주", "도움", "help")
+        if any(trigger in normalized for trigger in study_triggers) and any(
+            trigger in normalized for trigger in help_triggers
+        ):
+            return "학습에 대해 함께 계획해볼까요? 필요한 주제나 목표를 알려주세요."
+
+        if "계산" in normalized or any(char.isdigit() for char in normalized):
+            return "수학적 계산을 도와드릴 수 있어요. 구체적인 식을 알려주시면 해결해 드릴게요."
+
+        if "?" in message or "질문" in normalized:
+            return "질문을 잘 받았습니다. 조금만 더 구체적으로 말씀해 주시면 정확히 답변드릴 수 있어요."
+
+        if any(trigger in normalized for trigger in help_triggers):
+            return "어떤 도움이 필요하신가요? 상황을 조금 더 알려주시면 정확히 도와드릴게요."
+
         if confidence > 0.8:
             base_response = "네, 이해했습니다. "
         elif confidence > 0.5:
             base_response = "제가 이해한 바로는 "
         else:
-            base_response = "죄송하지만 명확하게 이해하지 못했습니다. "
+            base_response = "정확히 이해했는지 확신이 서지 않아요. "
 
-        # 간단한 패턴 매칭 응답
-        if "안녕" in original_message:
-            return "안녕하세요! PACA AI 어시스턴트입니다. 무엇을 도와드릴까요?"
-        elif "계산" in original_message or any(char.isdigit() for char in original_message):
-            return base_response + "수학적 계산을 도와드릴 수 있습니다. 구체적인 식을 알려주세요."
-        elif "?" in original_message or "질문" in original_message:
-            return base_response + "질문에 대해 생각해보고 답변드리겠습니다."
-        else:
-            return base_response + "말씀하신 내용에 대해 더 자세히 설명해 주시면 도움을 드릴 수 있습니다."
+        return base_response + "조금만 더 자세히 설명해 주시면 더 나은 도움을 드릴 수 있을 것 같아요."
 
     async def _setup_event_handlers(self):
         """이벤트 핸들러 설정"""
