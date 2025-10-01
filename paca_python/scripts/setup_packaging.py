@@ -373,13 +373,44 @@ GitHub: https://github.com/paca-team/paca-python
             else:
                 print(f"✅ 파일 크기 적절: {size_mb:.1f}MB")
 
-            # TODO: 실제 실행 테스트 (옵션)
-            print("ℹ️ 실행 테스트는 수동으로 확인하세요.")
+            if self._run_smoke_test(exe_path):
+                print("✅ 실행 스모크 테스트 통과")
+            else:
+                print("❌ 실행 스모크 테스트에 실패했습니다.")
+                return False
 
             return True
 
         except Exception as e:
             print(f"❌ 빌드 검증 중 오류: {str(e)}")
+            return False
+
+    def _run_smoke_test(self, executable: Path) -> bool:
+        """생성된 실행 파일 또는 CLI가 정상적으로 기동되는지 간단히 확인"""
+
+        try:
+            if sys.platform == "win32" and executable.exists():
+                command = [str(executable), "--version"]
+            else:
+                command = [sys.executable, "-m", "paca", "--version"]
+
+            print(f"🧪 스모크 테스트 실행: {' '.join(command)}")
+            result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+
+            if result.returncode != 0:
+                print("stderr:", result.stderr.strip())
+                return False
+
+            output = (result.stdout or result.stderr).strip()
+            if output:
+                print("출력:", output)
+            return True
+
+        except subprocess.TimeoutExpired:
+            print("⏱️ 스모크 테스트가 시간 내에 완료되지 않았습니다.")
+            return False
+        except FileNotFoundError:
+            print("⚠️ 스모크 테스트 실행 파일을 찾을 수 없습니다.")
             return False
 
     def get_build_info(self) -> Dict:

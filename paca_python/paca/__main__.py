@@ -4,16 +4,21 @@ Personal Adaptive Cognitive Assistant v5
 """
 
 import asyncio
+import json
 import sys
 import argparse
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 import paca.cognitive._enable_collab_patch
+
+try:  # Optional dependency (only needed for YAML overrides)
+    import yaml  # type: ignore
+except Exception:  # pragma: no cover - YAML support is optional at runtime
+    yaml = None
 
 # UTF-8 인코딩 설정 (Windows 호환성)
 if os.name == 'nt':  # Windows
-    import locale
     try:
         # Python 3.7+ 에서 UTF-8 모드 활성화
         sys.stdout.reconfigure(encoding='utf-8')
@@ -190,48 +195,7 @@ async def main_async():
     logger = StructuredLogger("PacaMain")
 
     try:
-        # 설정 생성
-        config = PacaConfig()
-
-        # === 추가: 협업 재시도 정책 JSON 로드 ===
-        from paca.cognitive._collab_policy_loader import load_policy, apply_to_config
-        policy = load_policy()
-        apply_to_config(config, policy)
-        # =======================================
-
-        # === 추가: 현재 임계값들 디버그 프린트 ===
-        try:
-            print("[CFG] thresholds:",
-                  "reasoning=", getattr(config, "reasoning_confidence_threshold", None),
-                  "backtrack=", getattr(config, "backtrack_confidence_threshold", None),
-                  "switch=", getattr(config, "strategy_switch_confidence_threshold", None),
-                  "escal_min=", (getattr(config, "escalation", {}) or {}).get("min_confidence"))
-        except Exception:
-            pass
-        # =======================================
-
-        # === 추가: 임시 강제 완화(바로 효과 필요할 때) ===
-        # JSON이 제대로 반영되지 않는 환경을 대비한 안전 우회입니다.
-        # 나중에 JSON이 확실히 적용되는 걸 확인하면 아래 블록은 지워도 됩니다.
-        try:
-            setattr(config, "reasoning_confidence_threshold", 0.15)
-            setattr(config, "backtrack_confidence_threshold", 0.15)
-            setattr(config, "strategy_switch_confidence_threshold", 0.20)
-            if not hasattr(config, "policy"):
-                setattr(config, "policy", {})
-            config.policy["low_confidence_threshold"] = 0.15
-            if isinstance(getattr(config, "escalation", {}), dict):
-                config.escalation["min_confidence"] = 0.25
-        except Exception:
-            pass
-        # =======================================
-
-        if args.debug:
-            config.log_level = "DEBUG"
-            setattr(config, "debug", True)
-        else:
-            config.log_level = args.log_level
-            setattr(config, "debug", False)
+        config = _build_runtime_config(args, parser, logger)
 
         # GUI 모드
         if args.gui:
@@ -268,7 +232,7 @@ async def main_async():
     except KeyboardInterrupt:
         print("\n👋 프로그램을 종료합니다.")
     except Exception as e:
-        await logger.error(f"메인 실행 중 오류: {str(e)}")
+        logger.exception("메인 실행 중 오류", exc_info=e)
         print(f"❌ 실행 중 오류가 발생했습니다: {str(e)}")
         sys.exit(1)
 
@@ -286,3 +250,176 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def _load_user_config(path: Path) -> Dict[str, Any]:
+    """Load a user-specified configuration file."""
+
+    if not path.exists():
+        raise FileNotFoundError(str(path))
+
+    if path.is_dir():
+        raise ValueError("설정 파일 경로가 디렉터리입니다. 파일을 지정해 주세요.")
+
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    elif suffix in {".yaml", ".yml"}:
+        if yaml is None:
+            raise ValueError("YAML 설정을 로드하려면 PyYAML이 필요합니다. 'pip install pyyaml'을 실행하세요.")
+
+        with path.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+    else:
+        raise ValueError("지원하지 않는 설정 파일 형식입니다. JSON 또는 YAML 파일을 사용하세요.")
+
+    if data is None:
+        return {}
+
+    if not isinstance(data, dict):
+        raise ValueError("설정 파일의 최상위 구조는 객체(JSON) 또는 매핑(YAML)이어야 합니다.")
+
+    return data
+
+
+def _apply_overrides(config: PacaConfig, overrides: Dict[str, Any]) -> None:
+    """Merge user overrides into the runtime configuration."""
+
+    def _set_attr(name: str, value: Any) -> bool:
+        if hasattr(config, name):
+            setattr(config, name, value)
+            return True
+        return False
+
+    for key, value in overrides.items():
+        if key == "llm" and isinstance(value, dict):
+            api_keys = value.get("api_keys")
+            if isinstance(api_keys, (list, tuple)):
+                cleaned = [str(item).strip() for item in api_keys if str(item).strip()]
+                if cleaned:
+                    config.gemini_api_keys = cleaned
+
+            default_model = value.get("default_model")
+            if isinstance(default_model, str):
+                config.default_llm_model = default_model
+
+            temperature = value.get("temperature")
+            if temperature is not None:
+                try:
+                    config.llm_temperature = float(temperature)
+                except (TypeError, ValueError):
+                    pass
+
+            max_tokens = value.get("max_tokens")
+            if max_tokens is not None:
+                try:
+                    config.llm_max_tokens = int(max_tokens)
+                except (TypeError, ValueError):
+                    pass
+
+            timeout = value.get("timeout")
+            if timeout is not None:
+                try:
+                    config.llm_timeout = float(timeout)
+                except (TypeError, ValueError):
+                    pass
+
+            enable_cache = value.get("enable_caching")
+            if enable_cache is not None:
+                config.enable_llm_caching = bool(enable_cache)
+
+            rotation = value.get("rotation")
+            if isinstance(rotation, dict):
+                strategy = rotation.get("strategy")
+                if isinstance(strategy, str) and strategy.strip():
+                    config.llm_rotation_strategy = strategy.strip()
+
+                min_interval = rotation.get("min_interval_seconds")
+                if min_interval is not None:
+                    try:
+                        config.llm_rotation_min_interval = float(min_interval)
+                    except (TypeError, ValueError):
+                        pass
+
+            models = value.get("models")
+            if isinstance(models, dict):
+                config.llm_model_preferences = {
+                    str(model_key): [str(item) for item in items]
+                    for model_key, items in models.items()
+                    if isinstance(items, (list, tuple))
+                }
+
+            continue
+
+        if isinstance(value, dict):
+            existing = getattr(config, key, None)
+            if isinstance(existing, dict):
+                existing.update(value)
+            else:
+                setattr(config, key, value)
+            continue
+
+        if not _set_attr(key, value):
+            setattr(config, key, value)
+
+
+def _build_runtime_config(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    logger: StructuredLogger,
+) -> PacaConfig:
+    """Construct and return a configured ``PacaConfig`` instance for this run."""
+
+    config = PacaConfig()
+
+    overrides: Optional[Dict[str, Any]] = None
+
+    if args.config:
+        try:
+            overrides = _load_user_config(args.config)
+        except FileNotFoundError:
+            parser.error(f"설정 파일을 찾을 수 없습니다: {args.config}")
+        except ValueError as config_error:
+            parser.error(str(config_error))
+        except Exception as unexpected_error:  # pragma: no cover - safety net
+            parser.error(
+                f"설정 파일을 읽는 중 오류가 발생했습니다: {unexpected_error}"
+            )
+
+    from paca.cognitive._collab_policy_loader import (  # pylint: disable=import-outside-toplevel
+        apply_to_config,
+        load_policy,
+    )
+
+    policy = load_policy()
+    apply_to_config(config, policy)
+
+    if overrides:
+        _apply_overrides(config, overrides)
+
+    if args.debug:
+        config.log_level = "DEBUG"
+        setattr(config, "debug", True)
+    else:
+        config.log_level = args.log_level
+        setattr(config, "debug", False)
+
+    try:
+        logger.debug(
+            "활성 임계값",
+            extra={
+                "reasoning": getattr(config, "reasoning_confidence_threshold", None),
+                "backtrack": getattr(config, "backtrack_confidence_threshold", None),
+                "strategy_switch": getattr(
+                    config, "strategy_switch_confidence_threshold", None
+                ),
+                "escalation_min": (getattr(config, "escalation", {}) or {}).get(
+                    "min_confidence"
+                ),
+            },
+        )
+    except Exception:  # pragma: no cover - defensive logging only
+        pass
+
+    return config
