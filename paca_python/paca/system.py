@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from .core.types import Result, Status, Priority, LogLevel, create_id, current_timestamp
-from .core.events import EventBus, EventEmitter
+from .core.events import EventBus, EventEmitter, EventListener
 from .core.errors import PacaError, CognitiveError
 from .core.utils.logger import PacaLogger
 from .cognitive import (
@@ -140,6 +140,33 @@ class PacaSystem:
             "success_rate": 0.0,
             "learning_sessions": 0
         }
+        self.performance_metrics.update({
+            "cognitive_events": {
+                "completed": 0,
+                "failed": 0,
+                "last_confidence": None,
+                "last_processing_ms": None,
+                "last_error": None,
+            },
+            "reasoning_events": {
+                "completed": 0,
+                "failed": 0,
+                "last_confidence": None,
+                "last_execution_ms": None,
+                "last_error": None,
+            },
+            "service_events": {
+                "started": [],
+                "failed": [],
+                "stopped": [],
+            },
+        })
+        self._service_status_cache = {
+            "started": set(),
+            "failed": set(),
+            "stopped": set(),
+        }
+        self._events_bound = False
 
     async def initialize(self) -> Result[bool]:
         """시스템 초기화"""
@@ -1144,8 +1171,127 @@ class PacaSystem:
 
     async def _setup_event_handlers(self):
         """이벤트 핸들러 설정"""
-        # 시스템 간 이벤트 연결 설정
-        pass
+
+        emitter = self.event_bus
+        if emitter is None:
+            return
+
+        # 서브시스템에 이벤트 버스 주입
+        if self.cognitive_system and hasattr(self.cognitive_system, "events"):
+            self.cognitive_system.events = emitter
+            processors = getattr(self.cognitive_system, "processors", {})
+            try:
+                processor_values = processors.values() if isinstance(processors, dict) else list(processors)
+            except Exception:
+                processor_values = []
+            for processor in processor_values:
+                if hasattr(processor, "events"):
+                    processor.events = emitter
+
+        if self.reasoning_engine and hasattr(self.reasoning_engine, "events"):
+            self.reasoning_engine.events = emitter
+            engines = getattr(self.reasoning_engine, "engines", {})
+            try:
+                engine_values = engines.values() if isinstance(engines, dict) else list(engines)
+            except Exception:
+                engine_values = []
+            for engine in engine_values:
+                if hasattr(engine, "events"):
+                    engine.events = emitter
+
+        if self.service_manager and hasattr(self.service_manager, "events"):
+            self.service_manager.events = emitter
+            services = getattr(self.service_manager, "services", {})
+            try:
+                service_values = services.values() if isinstance(services, dict) else list(services)
+            except Exception:
+                service_values = []
+            for service in service_values:
+                if hasattr(service, "events"):
+                    service.events = emitter
+
+        if self._events_bound:
+            return
+
+        def _ensure_service_metrics() -> None:
+            events = self.performance_metrics.setdefault("service_events", {
+                "started": [],
+                "failed": [],
+                "stopped": [],
+            })
+            for key in ("started", "failed", "stopped"):
+                events.setdefault(key, [])
+
+        def _update_service_state(bucket: str, service_name: Optional[str]) -> None:
+            if not service_name:
+                return
+
+            self._service_status_cache.setdefault(bucket, set())
+            for other_bucket, values in self._service_status_cache.items():
+                if other_bucket != bucket and service_name in values:
+                    values.remove(service_name)
+            self._service_status_cache[bucket].add(service_name)
+            _ensure_service_metrics()
+            for state_name, values in self._service_status_cache.items():
+                self.performance_metrics["service_events"][state_name] = sorted(values)
+
+        def _on_cognitive_completed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["cognitive_events"]
+            metrics["completed"] += 1
+            metrics["last_confidence"] = data.get("confidence")
+            metrics["last_processing_ms"] = data.get("processing_time_ms")
+            metrics["last_error"] = None
+
+        def _on_cognitive_failed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["cognitive_events"]
+            metrics["failed"] += 1
+            metrics["last_error"] = data.get("error")
+
+        def _on_reasoning_completed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["reasoning_events"]
+            metrics["completed"] += 1
+            metrics["last_confidence"] = data.get("confidence")
+            metrics["last_execution_ms"] = data.get("execution_time_ms")
+            metrics["last_error"] = None
+
+        def _on_reasoning_failed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["reasoning_events"]
+            metrics["failed"] += 1
+            metrics["last_error"] = data.get("error")
+
+        async def _subscribe(event_type: str, callback) -> None:
+            class _InlineListener(EventListener):
+                def __init__(self):
+                    super().__init__([event_type])
+
+                async def handle(self, event) -> None:
+                    result = callback(event)
+                    if asyncio.iscoroutine(result):
+                        await result
+
+            await emitter.subscribe(_InlineListener())
+
+        def _make_service_handler(bucket: str):
+            def _handler(event) -> None:
+                data = getattr(event, "data", {}) or {}
+                service_name = data.get("service_name") or data.get("service_id")
+                _update_service_state(bucket, service_name)
+
+            return _handler
+
+        await _subscribe('cognitive.process.completed', _on_cognitive_completed)
+        await _subscribe('cognitive.process.failed', _on_cognitive_failed)
+        await _subscribe('reasoning.completed', _on_reasoning_completed)
+        await _subscribe('reasoning.failed', _on_reasoning_failed)
+        await _subscribe('service.started', _make_service_handler('started'))
+        await _subscribe('service.start_failed', _make_service_handler('failed'))
+        await _subscribe('service.stopped', _make_service_handler('stopped'))
+
+        self._events_bound = True
 
     async def get_system_status(self) -> Dict[str, Any]:
         """시스템 상태 정보 반환"""

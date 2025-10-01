@@ -64,24 +64,26 @@ class LongTermMemory:
         self.config = config or MemoryConfiguration()
         self.settings = settings or self._load_settings()
         self.storage_manager = storage_manager or get_storage_manager()
+        self.logger = logging.getLogger("LongTermMemory")
+
         adapter_name = (self.settings.storage_adapter or "sqlite").lower()
         if adapter_name != "sqlite":
-            raise NotImplementedError(
-                f"Unsupported long-term storage adapter: {self.settings.storage_adapter}"
+            self.logger.warning(
+                "Unsupported long-term storage adapter '%s'; falling back to sqlite",
+                self.settings.storage_adapter,
             )
+            adapter_name = "sqlite"
 
         self.storage_adapter = SQLiteStorageAdapter(
             self.settings,
             self.storage_manager,
-            explicit_path=db_path,
+            explicit_path=db_path if adapter_name == "sqlite" else ":memory:",
         )
         self.conn = self.storage_adapter.connect()
         self.semantic_knowledge: Dict[str, SemanticKnowledge] = {}
         self.procedural_knowledge: Dict[str, ProceduralKnowledge] = {}
         self.metrics = MemoryMetrics()
         self._initialized = False
-
-        self.logger = logging.getLogger("LongTermMemory")
 
         # 데이터베이스 초기화
         self._init_database()

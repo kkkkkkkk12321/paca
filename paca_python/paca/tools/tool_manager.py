@@ -149,6 +149,11 @@ class PACAToolManager(ToolManager):
     def _check_rate_limit(self, tool_name: str, max_calls: int = 10,
                          window_minutes: int = 1) -> bool:
         """속도 제한 확인"""
+
+        # SafetyPolicy에 정의된 속도 제한이 우선한다.
+        if self.safety_policy.get_rate_limit(tool_name) or self.safety_policy.get_rate_limit("*"):
+            return self.safety_policy.consume_rate_limit(tool_name)
+
         now = datetime.now()
         window_start = now - timedelta(minutes=window_minutes)
 
