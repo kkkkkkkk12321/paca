@@ -5,10 +5,10 @@ CustomTkinter 기반 GUI 데스크톱 애플리케이션
 
 import customtkinter as ctk
 import asyncio
-import threading
 import sys
 import os
-from typing import Optional
+import tkinter as tk
+from typing import List, Optional
 from pathlib import Path
 import tkinter.messagebox as messagebox
 
@@ -33,7 +33,8 @@ try:
     )
     from paca.mathematics import Calculator
     from paca.services.learning import LearningService
-    from paca.core.types.base import Result, Status
+    from paca.core.types.base import Result
+    from paca.system import PacaSystem
 
     # GUI 기능 확인
     if not has_gui_features():
@@ -46,6 +47,9 @@ except ImportError as e:
     print(f"PACA 모듈 import 오류: {e}")
     print("기본 기능만 제공됩니다.")
     print_feature_status()
+    PacaSystem = None  # type: ignore
+
+from .api_key_store import ApiKeyStore
 
 
 class PacaDesktopApp:
@@ -66,6 +70,10 @@ class PacaDesktopApp:
         self.calculator = None
         self.learning_service = None
         self.is_running = False
+        self.paca_system: Optional[PacaSystem] = None
+        self.paca_system_ready = False
+        self.api_key_store = ApiKeyStore(self._default_api_key_path())
+        self.api_key_dialog: Optional["ApiKeyManagerDialog"] = None
 
         # UI 구성 요소
         self.chat_display = None
@@ -147,6 +155,15 @@ class PacaDesktopApp:
         )
         learning_btn.pack(pady=2, padx=10)
 
+        api_key_btn = ctk.CTkButton(
+            tools_frame,
+            text="API 키 관리",
+            command=self.open_api_key_manager,
+            height=30,
+            width=200,
+        )
+        api_key_btn.pack(pady=2, padx=10)
+
         status_btn = ctk.CTkButton(
             tools_frame, text="시스템 상태", command=self.show_system_status,
             height=30, width=200
@@ -204,6 +221,8 @@ class PacaDesktopApp:
         except Exception as e:
             self.update_status(f"초기화 오류: {str(e)}", "red")
             print(f"PACA 서비스 초기화 오류: {e}")
+
+        self._initialize_paca_system()
 
     def add_chat_message(self, sender: str, message: str):
         """채팅 메시지 추가"""
@@ -358,6 +377,7 @@ class PacaDesktopApp:
         서비스 상태: {'활성화' if self.is_running else '비활성화'}
         계산기: {'사용 가능' if self.calculator else '사용 불가'}
         학습 서비스: {'사용 가능' if self.learning_service else '사용 불가'}
+        LLM 시스템: {'초기화됨' if self.paca_system_ready else '미초기화'}
 
         GUI 애플리케이션이 정상 동작 중입니다.
         """
@@ -369,13 +389,223 @@ class PacaDesktopApp:
 
     def on_closing(self):
         """애플리케이션 종료 처리"""
+        if self.paca_system:
+            try:
+                asyncio.run(self.paca_system.cleanup())
+            except Exception as e:
+                print(f"PACA 시스템 정리 중 오류: {e}")
         self.root.destroy()
+
+    # --- PACA 시스템 및 API 키 관리 유틸리티 ---
+
+    def _default_api_key_path(self) -> Path:
+        base_dir = Path(__file__).resolve().parent.parent / "data" / "config"
+        return base_dir / "gui_llm_keys.json"
+
+    def _initialize_paca_system(self):
+        """Initialize PACA core components for LLM key management."""
+        self.paca_system_ready = False
+
+        if 'PacaSystem' not in globals() or PacaSystem is None:
+            self.update_status("PACA 시스템 모듈을 불러올 수 없습니다.", "red")
+            return
+
+        try:
+            self.paca_system = PacaSystem()
+            init_result = asyncio.run(self.paca_system.initialize())
+        except Exception as e:
+            self.update_status(f"PACA 시스템 초기화 실패: {e}", "red")
+            self.paca_system = None
+            return
+
+        if not init_result.is_success:
+            self.update_status(f"PACA 시스템 초기화 실패: {init_result.error}", "red")
+            self.paca_system = None
+            return
+
+        persisted_keys = self.api_key_store.load()
+        if persisted_keys:
+            try:
+                update_result = asyncio.run(
+                    self.paca_system.update_llm_api_keys(persisted_keys)
+                )
+                if not update_result.is_success:
+                    self.update_status("저장된 API 키를 적용하지 못했습니다.", "orange")
+                else:
+                    self._persist_api_keys()
+            except Exception as e:
+                self.update_status(f"API 키 적용 중 오류: {e}", "orange")
+        else:
+            self._persist_api_keys()
+
+        self.paca_system_ready = True
+
+    def open_api_key_manager(self):
+        """Display the API key manager dialog."""
+        if not self.paca_system_ready or not self.paca_system:
+            messagebox.showerror("API 키 관리", "PACA 시스템이 아직 준비되지 않았습니다.")
+            return
+
+        if self.api_key_dialog and self.api_key_dialog.is_open:
+            self.api_key_dialog.window.focus_set()
+            return
+
+        self.api_key_dialog = ApiKeyManagerDialog(self)
+
+    def get_current_api_keys(self) -> List[str]:
+        if self.paca_system and getattr(self.paca_system, "config", None):
+            return list(self.paca_system.config.gemini_api_keys)
+        return []
+
+    def add_api_key(self, api_key: str) -> Result:
+        if not self.paca_system_ready or not self.paca_system:
+            return Result.failure("PACA 시스템이 준비되지 않았습니다.")
+
+        try:
+            result = asyncio.run(self.paca_system.add_llm_api_key(api_key))
+        except Exception as e:
+            return Result.failure(str(e))
+
+        if result.is_success:
+            self._persist_api_keys()
+        return result
+
+    def remove_api_key(self, api_key: str) -> Result:
+        if not self.paca_system_ready or not self.paca_system:
+            return Result.failure("PACA 시스템이 준비되지 않았습니다.")
+
+        try:
+            result = asyncio.run(self.paca_system.remove_llm_api_key(api_key))
+        except Exception as e:
+            return Result.failure(str(e))
+
+        if result.is_success:
+            self._persist_api_keys()
+        return result
+
+    def _persist_api_keys(self):
+        try:
+            self.api_key_store.save(self.get_current_api_keys())
+        except Exception as e:
+            print(f"API 키 저장 중 오류: {e}")
+
+    def mask_api_key(self, api_key: str) -> str:
+        cleaned = api_key.strip()
+        if len(cleaned) <= 8:
+            return "*" * len(cleaned)
+        return f"{cleaned[:4]}{'*' * (len(cleaned) - 8)}{cleaned[-4:]}"
 
     def run(self):
         """애플리케이션 실행"""
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.mainloop()
 
+
+class ApiKeyManagerDialog:
+    """Modal dialog that lets users manage Gemini API keys."""
+
+    def __init__(self, app: PacaDesktopApp):
+        self.app = app
+        self.window = ctk.CTkToplevel(app.root)
+        self.window.title("LLM API 키 관리")
+        self.window.geometry("480x420")
+        self.window.grab_set()
+        self.window.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        self.info_label = ctk.CTkLabel(
+            self.window,
+            text="사용 중인 Gemini API 키를 추가하거나 제거할 수 있습니다.",
+            wraplength=420,
+            justify="left",
+        )
+        self.info_label.pack(padx=20, pady=(20, 10), anchor="w")
+
+        list_frame = ctk.CTkFrame(self.window)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        self.key_listbox = tk.Listbox(list_frame, height=10)
+        self.key_listbox.pack(fill="both", expand=True, side="left", padx=(0, 10))
+
+        scrollbar = tk.Scrollbar(list_frame, orient="vertical", command=self.key_listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.key_listbox.config(yscrollcommand=scrollbar.set)
+
+        entry_frame = ctk.CTkFrame(self.window)
+        entry_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+        self.new_key_entry = ctk.CTkEntry(entry_frame, placeholder_text="새 API 키 입력")
+        self.new_key_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        add_button = ctk.CTkButton(entry_frame, text="추가", command=self.add_key)
+        add_button.pack(side="right")
+
+        action_frame = ctk.CTkFrame(self.window)
+        action_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+        remove_button = ctk.CTkButton(action_frame, text="선택 항목 삭제", command=self.remove_selected_key)
+        remove_button.pack(side="left")
+
+        refresh_button = ctk.CTkButton(action_frame, text="새로고침", command=self.refresh_keys)
+        refresh_button.pack(side="right")
+
+        self.feedback_label = ctk.CTkLabel(self.window, text="", text_color="white")
+        self.feedback_label.pack(fill="x", padx=20, pady=(0, 15))
+
+        self.key_mapping = []
+        self.refresh_keys()
+
+    @property
+    def is_open(self) -> bool:
+        try:
+            return bool(self.window.winfo_exists())
+        except tk.TclError:
+            return False
+
+    def refresh_keys(self):
+        keys = self.app.get_current_api_keys()
+        self.key_mapping = keys
+        self.key_listbox.delete(0, tk.END)
+        for key in keys:
+            self.key_listbox.insert(tk.END, self.app.mask_api_key(key))
+        self.feedback_label.configure(text=f"총 {len(keys)}개의 키가 등록되어 있습니다.", text_color="white")
+
+    def add_key(self):
+        new_key = self.new_key_entry.get().strip()
+        if not new_key:
+            self.feedback_label.configure(text="API 키를 입력해주세요.", text_color="#ffcc00")
+            return
+
+        result = self.app.add_api_key(new_key)
+        if result.is_success:
+            self.new_key_entry.delete(0, tk.END)
+            self.refresh_keys()
+            self.feedback_label.configure(text="API 키가 추가되었습니다.", text_color="#90ee90")
+        else:
+            self.feedback_label.configure(text=f"추가 실패: {result.error}", text_color="#ff6666")
+
+    def remove_selected_key(self):
+        selection = self.key_listbox.curselection()
+        if not selection:
+            self.feedback_label.configure(text="삭제할 키를 선택하세요.", text_color="#ffcc00")
+            return
+
+        index = selection[0]
+        if index >= len(getattr(self, "key_mapping", [])):
+            self.feedback_label.configure(text="선택한 항목을 찾을 수 없습니다.", text_color="#ff6666")
+            return
+
+        key = self.key_mapping[index]
+        result = self.app.remove_api_key(key)
+        if result.is_success:
+            self.refresh_keys()
+            self.feedback_label.configure(text="API 키가 삭제되었습니다.", text_color="#90ee90")
+        else:
+            self.feedback_label.configure(text=f"삭제 실패: {result.error}", text_color="#ff6666")
+
+    def on_close(self):
+        self.window.grab_release()
+        self.window.destroy()
+        self.app.api_key_dialog = None
 
 def main():
     """메인 실행"""
