@@ -19,7 +19,6 @@ except Exception:  # pragma: no cover - YAML support is optional at runtime
 
 # UTF-8 인코딩 설정 (Windows 호환성)
 if os.name == 'nt':  # Windows
-    import locale
     try:
         # Python 3.7+ 에서 UTF-8 모드 활성화
         sys.stdout.reconfigure(encoding='utf-8')
