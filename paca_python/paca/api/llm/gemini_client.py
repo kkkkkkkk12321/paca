@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
 import os
 import random
+import threading
 
 try:
     import google.genai as genai
@@ -64,56 +65,69 @@ class APIKeyManager:
         self.api_keys: List[str] = []
         self.failed_keys: set[str] = set()
         self.last_used: Dict[str, float] = {}
+        self.usage_counts: Dict[str, int] = {}
         self.current_index: int = 0
+        self._lock = threading.Lock()
         self.set_keys(api_keys or [])
 
     def set_keys(self, api_keys: List[str]) -> None:
         """API 키 전체 설정"""
-        unique_keys: List[str] = []
-        for key in api_keys:
-            cleaned = (key or "").strip()
-            if cleaned and cleaned not in unique_keys:
-                unique_keys.append(cleaned)
+        with self._lock:
+            unique_keys: List[str] = []
+            for key in api_keys:
+                cleaned = (key or "").strip()
+                if cleaned and cleaned not in unique_keys:
+                    unique_keys.append(cleaned)
 
-        self.api_keys = unique_keys
-        self.failed_keys.intersection_update(self.api_keys)
-        self.last_used = {key: self.last_used.get(key, 0.0) for key in self.api_keys}
-        if self.api_keys:
-            self.current_index %= len(self.api_keys)
-        else:
-            self.current_index = 0
-
-    def add_keys(self, api_keys: List[str]) -> None:
-        """API 키 추가"""
-        updated = False
-        for key in api_keys:
-            cleaned = (key or "").strip()
-            if cleaned and cleaned not in self.api_keys:
-                self.api_keys.append(cleaned)
-                self.last_used.setdefault(cleaned, 0.0)
-                updated = True
-
-        if updated and self.api_keys:
-            self.current_index %= len(self.api_keys)
-
-    def remove_key(self, api_key: str) -> None:
-        """특정 API 키 제거"""
-        cleaned = (api_key or "").strip()
-        if cleaned in self.api_keys:
-            self.api_keys.remove(cleaned)
-            self.failed_keys.discard(cleaned)
-            self.last_used.pop(cleaned, None)
+            self.api_keys = unique_keys
+            self.failed_keys.intersection_update(self.api_keys)
+            self.last_used = {key: self.last_used.get(key, 0.0) for key in self.api_keys}
+            self.usage_counts = {key: self.usage_counts.get(key, 0) for key in self.api_keys}
             if self.api_keys:
                 self.current_index %= len(self.api_keys)
             else:
                 self.current_index = 0
 
+    def add_keys(self, api_keys: List[str]) -> None:
+        """API 키 추가"""
+        with self._lock:
+            updated = False
+            for key in api_keys:
+                cleaned = (key or "").strip()
+                if cleaned and cleaned not in self.api_keys:
+                    self.api_keys.append(cleaned)
+                    self.last_used.setdefault(cleaned, 0.0)
+                    self.usage_counts.setdefault(cleaned, 0)
+                    updated = True
+
+            if updated and self.api_keys:
+                self.current_index %= len(self.api_keys)
+
+    def remove_key(self, api_key: str) -> None:
+        """특정 API 키 제거"""
+        cleaned = (api_key or "").strip()
+        with self._lock:
+            if cleaned in self.api_keys:
+                self.api_keys.remove(cleaned)
+                self.failed_keys.discard(cleaned)
+                self.last_used.pop(cleaned, None)
+                self.usage_counts.pop(cleaned, None)
+                if self.api_keys:
+                    self.current_index %= len(self.api_keys)
+                else:
+                    self.current_index = 0
+
     def get_keys(self) -> List[str]:
         """현재 등록된 키 목록 반환"""
-        return list(self.api_keys)
+        with self._lock:
+            return list(self.api_keys)
 
     def get_next_key(self) -> Optional[str]:
         """다음 사용할 API 키 반환"""
+        with self._lock:
+            return self._select_next_key_locked()
+
+    def _select_next_key_locked(self) -> Optional[str]:
         if not self.api_keys:
             return None
 
@@ -121,47 +135,66 @@ class APIKeyManager:
         current_time = time.time()
 
         if self.rotation_strategy == "random":
-            order = random.sample(range(total_keys), total_keys)
+            ordered_indices = random.sample(range(total_keys), total_keys)
         else:
             start_index = self.current_index
-            order = [(start_index + offset) % total_keys for offset in range(total_keys)]
+            ordered_indices = [
+                (start_index + offset) % total_keys for offset in range(total_keys)
+            ]
 
-        for idx in order:
+        eligible: List[tuple[int, float, int, str]] = []
+        cooldown: List[tuple[int, float, int, str]] = []
+
+        for idx in ordered_indices:
             key = self.api_keys[idx]
             if key in self.failed_keys:
                 continue
 
             last_used = self.last_used.get(key, 0.0)
-            if current_time - last_used < self.min_interval_seconds:
-                continue
+            usage = self.usage_counts.get(key, 0)
+            entry = (usage, last_used, idx, key)
 
-            self.last_used[key] = current_time
-            if self.rotation_strategy != "random":
-                self.current_index = (idx + 1) % total_keys
-            return key
+            if current_time - last_used >= self.min_interval_seconds:
+                eligible.append(entry)
+            else:
+                cooldown.append(entry)
 
-        available_keys = [key for key in self.api_keys if key not in self.failed_keys]
-        if not available_keys:
-            self.failed_keys.clear()
-            return self.get_next_key()
+        if eligible:
+            _, _, idx, key = min(eligible, key=lambda item: (item[0], item[1], item[2]))
+        elif cooldown:
+            _, _, idx, key = min(cooldown, key=lambda item: (item[0], item[1], item[2]))
+        else:
+            if self.failed_keys:
+                self.failed_keys.clear()
+                return self._select_next_key_locked()
+            return None
 
-        oldest_key = min(available_keys, key=lambda k: self.last_used.get(k, 0.0))
-        self.last_used[oldest_key] = current_time
+        self.last_used[key] = current_time
+        self.usage_counts[key] = self.usage_counts.get(key, 0) + 1
+
         if self.rotation_strategy != "random":
-            self.current_index = (self.api_keys.index(oldest_key) + 1) % total_keys
-        return oldest_key
+            self.current_index = (idx + 1) % total_keys
+
+        return key
 
     def mark_key_failed(self, key: str) -> None:
         """키를 실패로 표시"""
         cleaned = (key or "").strip()
         if cleaned:
-            self.failed_keys.add(cleaned)
+            with self._lock:
+                self.failed_keys.add(cleaned)
 
     def mark_key_success(self, key: str) -> None:
         """키를 성공으로 표시"""
         cleaned = (key or "").strip()
         if cleaned:
-            self.failed_keys.discard(cleaned)
+            with self._lock:
+                self.failed_keys.discard(cleaned)
+
+    def get_usage_statistics(self) -> Dict[str, int]:
+        """현재까지 키 사용 횟수 통계를 반환"""
+        with self._lock:
+            return dict(self.usage_counts)
 
 
 class GeminiClientManager(LLMInterface):
