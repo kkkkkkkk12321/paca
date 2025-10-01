@@ -1011,6 +1011,18 @@ class PacaSystem:
         if not message:
             return "내부 분석을 수행할 수 있는 정보가 부족해요. 요청을 조금 더 구체적으로 설명해 주세요."
 
+        normalized = message.lower()
+
+        # 간단한 인사/감사/학습 요청 등 반복 패턴은 친근한 템플릿으로 즉시 응답한다.
+        if any(keyword in normalized for keyword in ["안녕", "안뇽", "hello", "hi"]):
+            return "안녕하세요! PACA입니다. 오늘은 어떤 도움을 드릴까요?"
+
+        if any(keyword in normalized for keyword in ["고마워", "감사", "thank"]):
+            return "천만에요! 도움이 필요하시면 언제든지 말씀해 주세요."
+
+        if any(keyword in normalized for keyword in ["공부", "학습", "도와줘", "도와 주", "help"]):
+            return "학습에 대해 무엇이 궁금하신가요? 목표나 현재 수준을 알려주시면 맞춤형으로 도와드릴게요."
+
         sentences = [s.strip() for s in re.split(r"(?<=[.!?\?\n])\s+", message) if s.strip()]
         summary = sentences[0] if sentences else message[:120]
         if len(summary) > 120:
