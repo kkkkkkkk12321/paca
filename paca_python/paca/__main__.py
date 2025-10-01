@@ -210,8 +210,6 @@ async def main_async():
                 parser.error(str(config_error))
             except Exception as unexpected_error:  # pragma: no cover - safety net
                 parser.error(f"설정 파일을 읽는 중 오류가 발생했습니다: {unexpected_error}")
-            else:
-                _apply_overrides(config, overrides)
 
         # === 추가: 협업 재시도 정책 JSON 로드 ===
         from paca.cognitive._collab_policy_loader import load_policy, apply_to_config
