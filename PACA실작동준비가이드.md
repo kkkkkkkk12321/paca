@@ -2,14 +2,14 @@
 
 > **Personal Adaptive Cognitive Assistant v5 완전한 기능 구현 가이드**
 > 작성일: 2025년 9월 25일
-> 현재 상태: 실사용 준비 완료 (100% 완성)
+> 현재 상태: 실사용 준비 진행 중 (약 60% 완성)
 
 ## 📊 현재 상태 분석
 
 ### 🎯 코드베이스 현황
-- **총 Python 파일**: 191개
-- **미완성 구현**: 0곳 (TODO/FIXME/NotImplemented 전량 해소)
-- **핵심 모듈**: 전 기능 구현 및 통합 테스트 완료
+- **총 Python 파일**: 191개 *(tests 포함)*
+- **미완성 구현**: TODO/FIXME/`NotImplemented`가 여전히 남아 있음 (`scripts/setup_packaging.py` 실행 검증 TODO, `cognitive/memory/longterm.py` 비-SQLite 어댑터 `NotImplementedError` 등)
+- **핵심 모듈**: 주요 경로는 동작하지만 이벤트 버스 연결·도구 속도 제한 등 일부 함수가 `pass` 상태라 보완 필요
 
 ### 🆕 진행 현황 업데이트 (2025-09-25)
 - Phase 1 기본 동작 검증을 위한 자동화 테스트(`tests/test_system_phase1.py`) 작성 및 통과 확인 *(CLI 제한으로 개별 케이스 실행)*
@@ -49,11 +49,25 @@
 - 회귀 테스트에 전략 전환/에스컬레이션 시나리오(`test_low_confidence_switches_strategy`, `test_escalation_triggers_when_configured_reason`)를 추가해 신규 정책이 안정적으로 작동함을 검증
 
 ### 🆕 진행 현황 업데이트 (2025-10-01)
-- CLI 구성 로더와 협업 정책 병합 로직을 완성해 `--config`/정책 파일의 임계값이 초기화 단계에서 유지되도록 전 구간을 점검했습니다.
-- Gemini 클라이언트가 시스템 프롬프트·대화 요약·최근 히스토리를 포함해 요청을 전송하도록 전면 재구성하고, 실패 시에는 학습 관찰 로그를 남기는 휴리스틱 폴백 엔진으로 일관되게 전환합니다.
-- GUI용 `ApiKeyStore` 및 CLI 키 관리 명령을 통합하고, 50개 이상의 Gemini 키를 균등 순환하는 스레드 세이프 로테이터와 회귀 테스트를 구축했습니다.
-- 선택 의존성(`email_validator`, `sympy`) 부재 환경에서도 테스트가 통과하도록 경량 스텁을 제공하고, 전체 테스트 스위트 51개 케이스가 모두 성공함을 확인했습니다.
-- PACA 시스템, 메모리 레이어, ReasoningChain, 자동 학습 엔진을 포함한 전 구성 요소의 초기화·정리 루틴을 점검해 실사용 워크플로우(터미널/GUI) 기준으로 동작 준비를 마쳤습니다.
+- CLI 구성 로더와 협업 정책 병합 로직을 정비해 `--config` 파일에서 전달한 임계값과 Gemini 설정이 초기화 과정에서 유지되도록 했습니다.
+- Gemini 클라이언트가 시스템 프롬프트·대화 요약·최근 히스토리를 요청 페이로드에 포함하고, LLM 호출 실패 시 휴리스틱 폴백 엔진으로 관찰 로그를 남기도록 개선했습니다.
+- GUI용 `ApiKeyStore` 및 CLI 키 관리 경로를 통합하고, 최대 50개의 Gemini 키를 균등 순환하는 스레드 세이프 로테이터와 회귀 테스트를 마련했습니다.
+- 선택 의존성(`email_validator`, `sympy`)이 없는 환경에서도 테스트가 통과하도록 스텁을 제공해 현재 배포본 기준 `pytest` 51개 케이스가 모두 성공함을 확인했습니다.
+- PACA 시스템, 메모리 레이어, ReasoningChain, 자동 학습 엔진의 기본 초기화/정리 루틴을 점검해 터미널·GUI 워크플로 기준 최소 가동은 가능함을 확인했습니다.
+
+### ⚠️ 2025-10-01 점검에서 드러난 미완성 요소
+- **이벤트 버스 연동 미구현**: `PacaSystem._setup_event_handlers()`가 여전히 `pass`로 남아 있어 핵심 서브시스템 간 이벤트가 실제로 연결되지 않습니다.
+- **도구 속도 제한 미구현**: `ToolSafetyPolicy.check_rate_limits()`가 `pass` 상태라 안전 정책상 필요한 속도 제한이 적용되지 않습니다.
+- **배포 실행 검증 미작성**: `scripts/setup_packaging.py`의 배포 검증 단계에 "TODO: 실제 실행 테스트"가 남아 있어 자동 검증 루틴이 완결되지 않았습니다.
+- **협업 정책 기본 파일 부재**: `paca_python/config/collab_policy.json`이 저장소에 없어 정책 로더가 항상 빈 설정을 반환합니다.
+- **장기 메모리 어댑터 한계**: `LongTermMemory`는 SQLite 이외 어댑터에 대해 `NotImplementedError`를 던져 확장 구성이 불가능합니다.
+
+### 🔧 추가 작업 계획 (업데이트)
+- [ ] 이벤트 버스 라우팅: `PacaSystem._setup_event_handlers()`에 복잡도/메타인지/ReasoningChain/서비스 이벤트를 연결해 실시간 모니터링과 오류 복구 흐름을 완성한다.
+- [ ] 도구 속도 제한 구현: `ToolSafetyPolicy.check_rate_limits()`에 운영 환경에서 요구되는 호출 간격·쿨다운 정책을 반영하고 테스트를 추가한다.
+- [ ] 배포 실행 검증 자동화: `scripts/setup_packaging.py`에 최소 실행 스모크 테스트를 구현해 빌드 산출물 검증을 자동화한다.
+- [ ] 협업 정책 기본값 제공: `paca_python/config/collab_policy.json` 기본 템플릿을 추가하고 정책 적용 테스트를 강화한다.
+- [ ] 장기 메모리 확장 전략: SQLite 이외 스토리지 어댑터의 우선순위를 정의하고 지원 불가 시 대체 경로를 가이드한다.
 
 ### 📌 Phase 2 진입 전 준비 체크리스트
 - [x] Phase 2 세부 스코프 확정 *(복잡도 감지, 메타인지, 메모리 등 세부 기능의 우선순위 및 범위 명확화)*
