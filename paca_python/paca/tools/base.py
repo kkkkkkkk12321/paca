@@ -7,9 +7,24 @@ ReAct 프레임워크의 기본 도구 아키텍처를 정의합니다.
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, TypeVar, Generic
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import uuid
+from collections import deque, defaultdict
+
+
+@dataclass(frozen=True)
+class RateLimitRule:
+    """단일 작업에 적용되는 속도 제한 규칙"""
+
+    max_calls: int
+    per_seconds: float
+
+    def __post_init__(self):
+        if self.max_calls <= 0:
+            raise ValueError("max_calls must be positive")
+        if self.per_seconds <= 0:
+            raise ValueError("per_seconds must be positive")
 
 T = TypeVar('T')
 
@@ -108,7 +123,8 @@ class SafetyPolicy:
     def __init__(self):
         self.allowed_operations = set()
         self.blocked_operations = set()
-        self.rate_limits = {}
+        self.rate_limits: Dict[str, RateLimitRule] = {}
+        self._operation_usage: Dict[str, deque] = defaultdict(deque)
         self.sandbox_mode = True
 
     def is_operation_allowed(self, operation: str, context: Dict[str, Any] = None) -> bool:
@@ -119,11 +135,55 @@ class SafetyPolicy:
         if self.allowed_operations and operation not in self.allowed_operations:
             return False
 
-        # 속도 제한 확인
-        if operation in self.rate_limits:
-            # 여기에 속도 제한 로직 구현
-            pass
+        return True
 
+    def configure_rate_limit(self, operation: str, max_calls: int, per_seconds: float) -> None:
+        """지정된 작업에 대한 속도 제한을 설정"""
+
+        self.rate_limits[operation] = RateLimitRule(max_calls=max_calls, per_seconds=per_seconds)
+
+    def clear_rate_limit(self, operation: str) -> None:
+        """설정된 속도 제한 제거"""
+
+        self.rate_limits.pop(operation, None)
+        self._operation_usage.pop(operation, None)
+
+    def get_rate_limit(self, operation: str, include_global: bool = True) -> Optional[RateLimitRule]:
+        """특정 작업 또는 글로벌('*') 속도 제한 규칙 조회"""
+
+        if operation in self.rate_limits:
+            return self.rate_limits[operation]
+        if include_global and "*" in self.rate_limits:
+            return self.rate_limits["*"]
+        return None
+
+    def will_exceed_rate_limit(self, operation: str) -> bool:
+        """현재 시점에서 호출 시 속도 제한을 초과하는지 확인 (카운트는 증가시키지 않음)"""
+
+        rule = self.get_rate_limit(operation)
+        if not rule:
+            return False
+
+        now = datetime.utcnow()
+        usage_window = now - timedelta(seconds=rule.per_seconds)
+        usage = self._operation_usage[operation]
+
+        while usage and usage[0] < usage_window:
+            usage.popleft()
+
+        return len(usage) >= rule.max_calls
+
+    def consume_rate_limit(self, operation: str) -> bool:
+        """속도 제한 검증 후 호출을 기록"""
+
+        rule = self.get_rate_limit(operation)
+        if not rule:
+            return True
+
+        if self.will_exceed_rate_limit(operation):
+            return False
+
+        self._operation_usage[operation].append(datetime.utcnow())
         return True
 
     def validate_parameters(self, tool_name: str, params: Dict[str, Any]) -> bool:

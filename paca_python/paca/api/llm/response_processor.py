@@ -233,15 +233,22 @@ class ContextManager:
         if not self.conversation_history:
             return "No previous conversation history."
 
-        recent_topics = []
+        summary_lines: List[str] = []
         for exchange in self.conversation_history[-3:]:
-            user_input = exchange['user_input']
-            # 간단한 주제 추출 (실제로는 더 정교한 NLP 필요)
-            words = user_input.split()[:10]  # 첫 10개 단어
-            topic = ' '.join(words)
-            recent_topics.append(topic)
+            user_input = (exchange.get('user_input') or '').strip()
+            assistant_response = (exchange.get('assistant_response') or '').strip()
 
-        return f"Recent topics: {'; '.join(recent_topics)}"
+            if user_input:
+                summary_lines.append(f"사용자: {user_input}")
+            if assistant_response:
+                summary_lines.append(f"PACA: {assistant_response}")
+
+        if not summary_lines:
+            return "No recent conversation details available."
+
+        joined = " | ".join(summary_lines)
+        # 지나치게 긴 요약은 잘라낸다 (LLM 입력 안정성을 위함)
+        return joined[:1000]
 
     def update_user_preferences(self, preferences: Dict[str, Any]) -> None:
         """사용자 선호도 업데이트"""

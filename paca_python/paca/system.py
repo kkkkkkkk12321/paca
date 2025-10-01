@@ -5,12 +5,13 @@ PACA 통합 시스템
 
 import asyncio
 import time
+from collections import Counter
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from .core.types import Result, Status, Priority, LogLevel, create_id, current_timestamp
-from .core.events import EventBus, EventEmitter
+from .core.events import EventBus, EventEmitter, EventListener
 from .core.errors import PacaError, CognitiveError
 from .core.utils.logger import PacaLogger
 from .cognitive import (
@@ -30,6 +31,13 @@ from .mathematics import Calculator, StatisticalAnalyzer
 from .services import ServiceManager, BaseService
 from .config import ConfigManager
 from .data import DataManager
+from .learning.auto import AutoLearningSystem
+from .learning.auto.types import (
+    LearningPoint,
+    LearningCategory,
+    DatabaseInterface,
+    ConversationMemoryInterface,
+)
 # LLM 모듈은 선택적으로 임포트
 try:
     from .api.llm import GeminiClientManager, GeminiConfig, LLMRequest, ModelType, GenerationConfig, create_gemini_client
@@ -92,6 +100,95 @@ class Message:
         self.metadata: Dict[str, Any] = {}
 
 
+class _LearningDatabaseAdapter(DatabaseInterface):
+    """AutoLearningSystem에 제공할 간단한 메모리 기반 DB 어댑터."""
+
+    def __init__(self):
+        self._experiences: List[Dict[str, str]] = []
+        self._heuristics: List[Dict[str, str]] = []
+
+    def add_experience(self, name: str, description: str) -> bool:
+        record = {"name": name, "description": description}
+        if record not in self._experiences:
+            self._experiences.append(record)
+        return True
+
+    def add_heuristic(self, rule: str) -> bool:
+        record = {"rule": rule}
+        if record not in self._heuristics:
+            self._heuristics.append(record)
+        return True
+
+    def get_experiences(self, context: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not context:
+            return list(self._experiences)
+        lowered = context.lower()
+        return [item for item in self._experiences if lowered in item["description"].lower()]
+
+    def get_heuristics(self, context: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not context:
+            return list(self._heuristics)
+        lowered = context.lower()
+        return [item for item in self._heuristics if lowered in item["rule"].lower()]
+
+    def summarize(self) -> Dict[str, List[str]]:
+        """최근 전술/휴리스틱 이름 요약"""
+        return {
+            "tactics": [item["name"] for item in self._experiences[-3:]],
+            "heuristics": [item["rule"] for item in self._heuristics[-3:]],
+        }
+
+
+class _ConversationMemoryAdapter(ConversationMemoryInterface):
+    """PacaSystem 대화 히스토리를 AutoLearningSystem에 노출."""
+
+    def __init__(self, system: "PacaSystem") -> None:
+        self._system = system
+        self._stored_points: List[LearningPoint] = []
+
+    def get_recent_conversations(self, limit: int = 10) -> List[Dict[str, Any]]:
+        history: List[Dict[str, Any]] = []
+        current_exchange: Optional[Dict[str, Any]] = None
+
+        for message in self._system.conversation_history:
+            if message.sender == "user":
+                current_exchange = {
+                    "user_message": message.content,
+                    "user_message_id": message.id,
+                    "timestamp": message.timestamp.isoformat(),
+                }
+            elif message.sender == "assistant":
+                if current_exchange is None:
+                    current_exchange = {"user_message": None, "user_message_id": None}
+                current_exchange.update({
+                    "assistant_response": message.content,
+                    "assistant_message_id": message.id,
+                    "assistant_timestamp": message.timestamp.isoformat(),
+                })
+                history.append(current_exchange)
+                current_exchange = None
+
+        if current_exchange is not None:
+            history.append(current_exchange)
+
+        return history[-limit:]
+
+    def get_conversation_context(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        if not conversation_id:
+            return None
+        for exchange in reversed(self.get_recent_conversations(limit=20)):
+            if exchange.get("assistant_message_id") == conversation_id or exchange.get("user_message_id") == conversation_id:
+                return exchange
+        return None
+
+    def store_learning_point(self, learning_point: LearningPoint) -> bool:
+        self._stored_points.append(learning_point)
+        return True
+
+    def recorded_points(self) -> List[LearningPoint]:
+        return list(self._stored_points)
+
+
 class PacaSystem:
     """
     PACA v5 통합 시스템
@@ -125,6 +222,12 @@ class PacaSystem:
         # 서비스 관리
         self.service_manager: Optional[ServiceManager] = None
 
+        # 학습 시스템
+        self.auto_learning_system: Optional[AutoLearningSystem] = None
+        self._learning_database: Optional[_LearningDatabaseAdapter] = None
+        self._conversation_memory_adapter: Optional[_ConversationMemoryAdapter] = None
+        self.recent_learning_points: List[str] = []
+
         # 대화 관리
         self.conversation_history: List[Message] = []
         self.user_context: Dict[str, Any] = {}
@@ -140,6 +243,33 @@ class PacaSystem:
             "success_rate": 0.0,
             "learning_sessions": 0
         }
+        self.performance_metrics.update({
+            "cognitive_events": {
+                "completed": 0,
+                "failed": 0,
+                "last_confidence": None,
+                "last_processing_ms": None,
+                "last_error": None,
+            },
+            "reasoning_events": {
+                "completed": 0,
+                "failed": 0,
+                "last_confidence": None,
+                "last_execution_ms": None,
+                "last_error": None,
+            },
+            "service_events": {
+                "started": [],
+                "failed": [],
+                "stopped": [],
+            },
+        })
+        self._service_status_cache = {
+            "started": set(),
+            "failed": set(),
+            "stopped": set(),
+        }
+        self._events_bound = False
 
     async def initialize(self) -> Result[bool]:
         """시스템 초기화"""
@@ -211,6 +341,8 @@ class PacaSystem:
                 self.status = Status.ERROR
                 self.logger.error("서비스 관리자 초기화 실패", error=service_init.error)
                 return Result.failure(service_init.error)
+
+            self._initialize_learning_system()
 
             await self._setup_event_handlers()
 
@@ -309,6 +441,22 @@ class PacaSystem:
                 analysis_payload["metacognition"] = await self._summarize_metacognition_session(
                     metacog_summary
                 )
+
+            learning_context = {
+                "confidence": reasoning_metadata.get("confidence"),
+                "complexity": getattr(complexity_result, "level", None).name if complexity_result else None,
+                "reasoning_used": reasoning_metadata.get("used"),
+            }
+            learning_summary = await self._apply_learning_feedback(
+                processed_input,
+                response_text,
+                learning_context,
+                user_id=user_id,
+                conversation_id=bot_message.id,
+            )
+
+            if learning_summary:
+                analysis_payload["learning"] = learning_summary
 
             result_data = {
                 "response": response_text,
@@ -631,8 +779,14 @@ class PacaSystem:
                         "잠시 뒤 다시 시도하거나, 다른 모델/키로 전환해주세요."
                     )
 
-                # 그 외 에러는 짧은 안내
-                return "죄송해요, 잠시 문제가 생겼어요. 다시 한 번 시도해 주세요."
+                # 그 외 에러는 규칙 기반 분석으로 대응
+                return self._generate_fallback_response(
+                    {
+                        "failure_reason": s or e.__class__.__name__,
+                        "confidence": 0.35,
+                    },
+                    message,
+                )
 
 
 
@@ -640,31 +794,119 @@ class PacaSystem:
         self,
         user_message: str,
         bot_response: str,
-        cognitive_data: Dict[str, Any]
-    ) -> bool:
-        """학습 피드백 적용"""
-        if not self.config.enable_learning:
-            return False
+        cognitive_data: Dict[str, Any],
+        *,
+        user_id: str,
+        conversation_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """대화 결과를 기반으로 자동 학습 시스템을 실행하고 요약 반환."""
 
+        if not getattr(self.config, "enable_learning", False):
+            return None
+
+        confidence = cognitive_data.get("confidence")
+
+        if self.auto_learning_system:
+            try:
+                learning_result = await self.auto_learning_system.analyze_learning_opportunities(
+                    user_message,
+                    bot_response,
+                    conversation_id,
+                )
+            except Exception as error:
+                self.logger.warn(
+                    "Auto-learning analysis failed",
+                    {"error": str(error)}
+                )
+                return None
+
+            if learning_result.is_failure:
+                self.logger.warn(
+                    "Auto-learning returned error",
+                    {"error": str(learning_result.error)}
+                )
+                return None
+
+            learning_points: List[LearningPoint] = learning_result.data or []
+            if not learning_points:
+                synthetic_point = self._generate_heuristic_learning_point(
+                    user_message,
+                    bot_response,
+                    conversation_id,
+                )
+                if synthetic_point:
+                    learning_points = [synthetic_point]
+                    self.auto_learning_system.learning_points.append(synthetic_point)
+                else:
+                    return None
+
+            category_counter: Counter = Counter()
+            confidence_sum = 0.0
+            persisted = 0
+            sample_insights: List[str] = []
+
+            for point in learning_points:
+                category_counter[point.category.value] += 1
+                confidence_sum += point.confidence
+                if point.extracted_knowledge:
+                    sample_insights.append(point.extracted_knowledge)
+                if await self._persist_learning_point(point, user_id):
+                    persisted += 1
+                if self._conversation_memory_adapter:
+                    self._conversation_memory_adapter.store_learning_point(point)
+
+            self.performance_metrics["learning_sessions"] += 1
+            self.recent_learning_points.extend(point.id for point in learning_points)
+            self.recent_learning_points = self.recent_learning_points[-20:]
+
+            summary: Dict[str, Any] = {
+                "detected_points": len(learning_points),
+                "categories": dict(category_counter),
+                "average_confidence": round(confidence_sum / len(learning_points), 3),
+                "persisted": persisted,
+            }
+
+            if sample_insights:
+                summary["sample_insights"] = sample_insights[:3]
+
+            try:
+                knowledge = self.auto_learning_system.get_generated_knowledge()
+                if knowledge.tactics:
+                    summary["generated_tactics"] = [
+                        tactic.get("name")
+                        for tactic in knowledge.tactics[:3]
+                        if tactic.get("name")
+                    ]
+                if knowledge.heuristics:
+                    summary["generated_heuristics"] = [
+                        heuristic.get("pattern") or heuristic.get("avoidance_rule")
+                        for heuristic in knowledge.heuristics[:3]
+                        if heuristic.get("pattern") or heuristic.get("avoidance_rule")
+                    ]
+            except Exception as error:
+                self.logger.warn(
+                    "Failed to gather generated knowledge",
+                    {"error": str(error)}
+                )
+
+            return summary
+
+        # AutoLearningSystem 미사용 시 기본 로직 유지
         try:
-            # 기본적인 학습 피드백 로직
-            # 실제로는 더 복잡한 강화학습 시스템 필요
-
-            confidence = cognitive_data.get("confidence", 0.5)
-
-            if confidence > self.config.learning_feedback_threshold:
-                # 성공적인 상호작용 학습
+            effective_confidence = confidence if confidence is not None else 0.5
+            if effective_confidence > self.config.learning_feedback_threshold:
                 self.user_context["successful_interactions"] = \
                     self.user_context.get("successful_interactions", 0) + 1
-
                 self.performance_metrics["learning_sessions"] += 1
-                return True
+                return {
+                    "detected_points": 0,
+                    "average_confidence": round(float(effective_confidence), 3),
+                    "note": "Auto-learning disabled; recorded successful interaction"
+                }
+        except Exception as error:
+            self.logger.error("학습 피드백 적용 오류", error=error)
 
-            return False
-
-        except Exception as e:
-            self.logger.error(f"학습 피드백 적용 오류: {str(e)}", error=e)
-            return False
+        return None
 
     async def _update_performance_metrics(self, processing_time: float, success: bool):
         """성능 메트릭 업데이트"""
@@ -685,6 +927,124 @@ class PacaSystem:
             current_success_count = self.performance_metrics["success_rate"] * (total_messages - 1)
             new_success_rate = current_success_count / total_messages
             self.performance_metrics["success_rate"] = new_success_rate
+
+    def _initialize_learning_system(self) -> None:
+        """자동 학습 시스템 초기화"""
+
+        if not getattr(self.config, "enable_learning", False):
+            self.auto_learning_system = None
+            self._learning_database = None
+            self._conversation_memory_adapter = None
+            return
+
+        if self.auto_learning_system is not None:
+            return
+
+        try:
+            self._learning_database = _LearningDatabaseAdapter()
+            self._conversation_memory_adapter = _ConversationMemoryAdapter(self)
+            self.auto_learning_system = AutoLearningSystem(
+                database=self._learning_database,
+                conversation_memory=self._conversation_memory_adapter,
+                enable_korean_nlp=getattr(self.config, "enable_korean_nlp", True),
+            )
+            self.logger.debug("AutoLearningSystem ready")
+        except Exception as learning_error:
+            self.logger.warn(
+                "AutoLearningSystem initialization failed",
+                {"error": str(learning_error)},
+            )
+            self.auto_learning_system = None
+            self._learning_database = None
+            self._conversation_memory_adapter = None
+
+    async def _persist_learning_point(self, point: LearningPoint, user_id: str) -> bool:
+        """학습 포인트를 데이터 저장소에 기록"""
+
+        if not self.data_storage:
+            return False
+
+        payload = {
+            "user_id": user_id,
+            "category": point.category.value,
+            "confidence": point.confidence,
+            "context": point.context,
+            "extracted_knowledge": point.extracted_knowledge,
+            "conversation_id": point.conversation_id,
+            "source_pattern": point.source_pattern,
+            "effectiveness_score": point.effectiveness_score,
+            "usage_count": point.usage_count,
+            "metadata": point.metadata,
+            "created_at": point.created_at,
+            "updated_at": point.updated_at,
+        }
+
+        store_result = await self.data_storage.store_data(
+            "learning",
+            point.id,
+            payload,
+            metadata={
+                "user_id": user_id,
+                "category": point.category.value,
+                "confidence": point.confidence,
+            },
+        )
+
+        if store_result.is_success:
+            return True
+
+        self.logger.warn(
+            "Failed to persist learning point",
+            {
+                "error": str(store_result.error),
+                "learning_point": point.id,
+            },
+        )
+        return False
+
+    def _generate_heuristic_learning_point(
+        self,
+        user_message: str,
+        bot_response: str,
+        conversation_id: str,
+    ) -> Optional[LearningPoint]:
+        """간단한 휴리스틱 기반으로 학습 포인트 생성"""
+
+        combined = f"{user_message} {bot_response}".lower()
+
+        success_keywords = ["해결", "성공", "완료", "정상", "고마워", "감사"]
+        failure_keywords = ["실패", "문제", "에러", "오류", "고장"]
+        preference_keywords = ["좋아", "싫어", "원해", "선호", "중요"]
+
+        category: Optional[LearningCategory] = None
+        extracted = ""
+        confidence = 0.55
+
+        if any(keyword in combined for keyword in success_keywords):
+            category = LearningCategory.SUCCESS_PATTERN
+            extracted = "사용자 피드백으로 작업이 성공적으로 완료되었음"
+            confidence = 0.7
+        elif any(keyword in combined for keyword in failure_keywords):
+            category = LearningCategory.ERROR_PATTERN
+            extracted = "보고된 문제 또는 오류를 재현·조사해야 함"
+        elif any(keyword in combined for keyword in preference_keywords):
+            category = LearningCategory.USER_PREFERENCE
+            extracted = "사용자 선호나 요구 사항이 파악됨"
+
+        if category is None:
+            return None
+
+        return LearningPoint(
+            user_message=user_message,
+            paca_response=bot_response,
+            context=conversation_id or "heuristic_context",
+            category=category,
+            confidence=confidence,
+            extracted_knowledge=extracted,
+            conversation_id=conversation_id,
+            source_pattern="heuristic_fallback",
+            metadata={"heuristic": True},
+        )
 
     def _apply_llm_config(self) -> None:
         """설정 관리자에서 LLM 관련 설정 반영"""
@@ -997,30 +1357,268 @@ class PacaSystem:
         return prompt
 
     def _generate_fallback_response(self, cognitive_data: Dict[str, Any], original_message: str) -> str:
-        """LLM 없이 기본 응답 생성 (백업용)"""
-        confidence = cognitive_data.get("confidence", 0.5)
+        """LLM 실패 시 규칙 기반 분석으로 응답 생성"""
+        import re
+        from collections import Counter
 
-        if confidence > 0.8:
-            base_response = "네, 이해했습니다. "
-        elif confidence > 0.5:
-            base_response = "제가 이해한 바로는 "
-        else:
-            base_response = "죄송하지만 명확하게 이해하지 못했습니다. "
+        message = (original_message or "").strip()
+        if not message:
+            return "내부 분석을 수행할 수 있는 정보가 부족해요. 요청을 조금 더 구체적으로 설명해 주세요."
 
-        # 간단한 패턴 매칭 응답
-        if "안녕" in original_message:
-            return "안녕하세요! PACA AI 어시스턴트입니다. 무엇을 도와드릴까요?"
-        elif "계산" in original_message or any(char.isdigit() for char in original_message):
-            return base_response + "수학적 계산을 도와드릴 수 있습니다. 구체적인 식을 알려주세요."
-        elif "?" in original_message or "질문" in original_message:
-            return base_response + "질문에 대해 생각해보고 답변드리겠습니다."
+        normalized = message.lower()
+
+        # 간단한 인사/감사/학습 요청 등 반복 패턴은 친근한 템플릿으로 즉시 응답한다.
+        if any(keyword in normalized for keyword in ["안녕", "안뇽", "hello", "hi"]):
+            return "안녕하세요! PACA입니다. 오늘은 어떤 도움을 드릴까요?"
+
+        if any(keyword in normalized for keyword in ["고마워", "감사", "thank"]):
+            return "천만에요! 도움이 필요하시면 언제든지 말씀해 주세요."
+
+        if any(keyword in normalized for keyword in ["공부", "학습", "도와줘", "도와 주", "help"]):
+            return "학습에 대해 무엇이 궁금하신가요? 목표나 현재 수준을 알려주시면 맞춤형으로 도와드릴게요."
+
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?\?\n])\s+", message) if s.strip()]
+        summary = sentences[0] if sentences else message[:120]
+        if len(summary) > 120:
+            summary = summary[:117] + "..."
+
+        tokens = re.findall(r"[가-힣a-zA-Z0-9]{2,}", message)
+        stopwords = {
+            "그리고", "하지만", "그러나", "그래서", "이어서", "그리고", "그러면", "그러니까",
+            "하면", "하면요", "위해", "대한", "어떤", "어떻게", "무엇", "어디", "어느",
+            "정도", "조금", "이번", "관련", "사용", "가능", "필요", "있는", "없는",
+            "합니다", "하세요", "해주세요", "있나요", "있을까요", "해주세요", "같아요",
+        }
+        normalized_tokens = [token.lower() for token in tokens if token.lower() not in stopwords]
+        keywords = [token for token, _ in Counter(normalized_tokens).most_common(5)]
+
+        question_detected = bool(re.search(r"[?？]$", message) or re.search(r"\b(why|how|what|when|who|where)\b", message, re.IGNORECASE) or re.search(r"(왜|어떻게|무엇|몇|어디|누가)", message))
+        task_detected = bool(re.search(r"(만들|구현|설계|작성|코드|빌드|제작)", message))
+        issue_detected = bool(re.search(r"(문제|오류|에러|버그|고장|실패)", message))
+
+        intents: List[str] = []
+        if question_detected:
+            intents.append("정보/질문")
+        if task_detected:
+            intents.append("실행/구현")
+        if issue_detected:
+            intents.append("문제 해결")
+        if not intents:
+            intents.append("일반 대화")
+
+        base_confidence = cognitive_data.get("confidence")
+        if base_confidence is None:
+            base_confidence = 0.45 + min(len(keywords) * 0.05, 0.2)
+            if question_detected:
+                base_confidence += 0.05
+            if issue_detected:
+                base_confidence += 0.05
+            base_confidence = max(0.35, min(base_confidence, 0.85))
+
+        analysis_lines: List[str] = []
+        analysis_lines.append(f"의도 분류: {', '.join(intents)}")
+        if keywords:
+            analysis_lines.append(f"핵심 키워드: {', '.join(keywords)}")
+
+        if len(message) > 200:
+            analysis_lines.append(f"요청 길이: {len(message)}자 (정보량이 많음)")
+        elif len(message) < 40:
+            analysis_lines.append("요청 길이: 짧음 (추가 정보 필요 가능)")
+
+        recent_context = []
+        if getattr(self, "conversation_history", None):
+            user_turns = [
+                m.content for m in reversed(self.conversation_history)
+                if getattr(m, "sender", "user") == "user"
+            ]
+            if user_turns:
+                # 최근 현재 메시지를 제외한 이전 사용자 메시지들을 참조
+                previous_messages = [turn for turn in user_turns[1:4] if turn != message]
+                if previous_messages:
+                    condensed = " | ".join(prev[:40] + ("..." if len(prev) > 40 else "") for prev in reversed(previous_messages))
+                    recent_context.append(f"이전 흐름: {condensed}")
+
+        plan_steps: List[str] = []
+        plan_steps.append("요청 의도를 명확히 정리하고 필요한 가정을 세웁니다.")
+        if question_detected:
+            plan_steps.append("질문에 답하기 위해 필요한 정보/근거 목록을 작성합니다.")
+        if task_detected:
+            plan_steps.append("실행 가능한 절차나 코드를 단계별로 설계합니다.")
+        if issue_detected:
+            plan_steps.append("문제 재현 조건과 해결 전략을 점검합니다.")
+        plan_steps.append("부족한 정보는 후속 질문으로 확보하고, 대화 로그에 학습 메모를 남깁니다.")
+
+        closing: str
+        if base_confidence >= 0.7:
+            closing = "현재 규칙 기반 추정 신뢰도는 높지만, 세부 확인을 위해 추가 설명을 부탁드릴 수 있습니다."
+        elif base_confidence >= 0.5:
+            closing = "규칙 기반 추정 신뢰도는 중간 수준입니다. 중요한 세부사항이 있다면 공유해 주세요."
         else:
-            return base_response + "말씀하신 내용에 대해 더 자세히 설명해 주시면 도움을 드릴 수 있습니다."
+            closing = "규칙 기반 추정 신뢰도가 낮아 추가 맥락이 필요합니다. 더 구체적으로 알려주시면 학습에 도움이 됩니다."
+
+        failure_reason = cognitive_data.get("failure_reason")
+
+        observation = {
+            "message": message[:200],
+            "keywords": keywords,
+            "confidence": round(base_confidence, 2),
+            "intents": intents,
+            "failure_reason": failure_reason,
+            "timestamp": datetime.now().isoformat(),
+        }
+        fallback_memory = self.user_context.setdefault("fallback_observations", [])
+        fallback_memory.append(observation)
+        if len(fallback_memory) > 25:
+            del fallback_memory[0]
+
+        response_lines: List[str] = [
+            "LLM 엔진 호출이 실패해 PACA의 규칙 기반 분석으로 응답드립니다.",
+            f"요청 요약: {summary}",
+        ]
+
+        if recent_context:
+            response_lines.extend(recent_context)
+
+        if analysis_lines:
+            response_lines.append("상황 해석:")
+            response_lines.extend(f"- {line}" for line in analysis_lines)
+
+        if plan_steps:
+            response_lines.append("대응 계획:")
+            response_lines.extend(f"{index}. {step}" for index, step in enumerate(plan_steps, start=1))
+
+        response_lines.append(closing)
+
+        if failure_reason:
+            response_lines.append(f"(참고: LLM 오류로 자동 대체됨 - {failure_reason})")
+
+        response_lines.append("대화를 이어가면 학습 메모를 바탕으로 더 나은 답변을 준비하겠습니다.")
+
+        return "\n".join(response_lines)
 
     async def _setup_event_handlers(self):
         """이벤트 핸들러 설정"""
-        # 시스템 간 이벤트 연결 설정
-        pass
+
+        emitter = self.event_bus
+        if emitter is None:
+            return
+
+        # 서브시스템에 이벤트 버스 주입
+        if self.cognitive_system and hasattr(self.cognitive_system, "events"):
+            self.cognitive_system.events = emitter
+            processors = getattr(self.cognitive_system, "processors", {})
+            try:
+                processor_values = processors.values() if isinstance(processors, dict) else list(processors)
+            except Exception:
+                processor_values = []
+            for processor in processor_values:
+                if hasattr(processor, "events"):
+                    processor.events = emitter
+
+        if self.reasoning_engine and hasattr(self.reasoning_engine, "events"):
+            self.reasoning_engine.events = emitter
+            engines = getattr(self.reasoning_engine, "engines", {})
+            try:
+                engine_values = engines.values() if isinstance(engines, dict) else list(engines)
+            except Exception:
+                engine_values = []
+            for engine in engine_values:
+                if hasattr(engine, "events"):
+                    engine.events = emitter
+
+        if self.service_manager and hasattr(self.service_manager, "events"):
+            self.service_manager.events = emitter
+            services = getattr(self.service_manager, "services", {})
+            try:
+                service_values = services.values() if isinstance(services, dict) else list(services)
+            except Exception:
+                service_values = []
+            for service in service_values:
+                if hasattr(service, "events"):
+                    service.events = emitter
+
+        if self._events_bound:
+            return
+
+        def _ensure_service_metrics() -> None:
+            events = self.performance_metrics.setdefault("service_events", {
+                "started": [],
+                "failed": [],
+                "stopped": [],
+            })
+            for key in ("started", "failed", "stopped"):
+                events.setdefault(key, [])
+
+        def _update_service_state(bucket: str, service_name: Optional[str]) -> None:
+            if not service_name:
+                return
+
+            self._service_status_cache.setdefault(bucket, set())
+            for other_bucket, values in self._service_status_cache.items():
+                if other_bucket != bucket and service_name in values:
+                    values.remove(service_name)
+            self._service_status_cache[bucket].add(service_name)
+            _ensure_service_metrics()
+            for state_name, values in self._service_status_cache.items():
+                self.performance_metrics["service_events"][state_name] = sorted(values)
+
+        def _on_cognitive_completed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["cognitive_events"]
+            metrics["completed"] += 1
+            metrics["last_confidence"] = data.get("confidence")
+            metrics["last_processing_ms"] = data.get("processing_time_ms")
+            metrics["last_error"] = None
+
+        def _on_cognitive_failed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["cognitive_events"]
+            metrics["failed"] += 1
+            metrics["last_error"] = data.get("error")
+
+        def _on_reasoning_completed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["reasoning_events"]
+            metrics["completed"] += 1
+            metrics["last_confidence"] = data.get("confidence")
+            metrics["last_execution_ms"] = data.get("execution_time_ms")
+            metrics["last_error"] = None
+
+        def _on_reasoning_failed(event) -> None:
+            data = getattr(event, "data", {}) or {}
+            metrics = self.performance_metrics["reasoning_events"]
+            metrics["failed"] += 1
+            metrics["last_error"] = data.get("error")
+
+        async def _subscribe(event_type: str, callback) -> None:
+            class _InlineListener(EventListener):
+                def __init__(self):
+                    super().__init__([event_type])
+
+                async def handle(self, event) -> None:
+                    result = callback(event)
+                    if asyncio.iscoroutine(result):
+                        await result
+
+            await emitter.subscribe(_InlineListener())
+
+        def _make_service_handler(bucket: str):
+            def _handler(event) -> None:
+                data = getattr(event, "data", {}) or {}
+                service_name = data.get("service_name") or data.get("service_id")
+                _update_service_state(bucket, service_name)
+
+            return _handler
+
+        await _subscribe('cognitive.process.completed', _on_cognitive_completed)
+        await _subscribe('cognitive.process.failed', _on_cognitive_failed)
+        await _subscribe('reasoning.completed', _on_reasoning_completed)
+        await _subscribe('reasoning.failed', _on_reasoning_failed)
+        await _subscribe('service.started', _make_service_handler('started'))
+        await _subscribe('service.start_failed', _make_service_handler('failed'))
+        await _subscribe('service.stopped', _make_service_handler('stopped'))
+
+        self._events_bound = True
 
     async def get_system_status(self) -> Dict[str, Any]:
         """시스템 상태 정보 반환"""
@@ -1071,6 +1669,11 @@ class PacaSystem:
 
             if self.data_storage:
                 await self.data_storage.cleanup()
+
+            self.auto_learning_system = None
+            self._learning_database = None
+            self._conversation_memory_adapter = None
+            self.recent_learning_points.clear()
 
             self.logger.info("PACA 시스템 정리 완료")
             self.status = Status.SHUTDOWN
