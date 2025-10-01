@@ -352,6 +352,10 @@ class GeminiClientManager(LLMInterface):
         if summary_text:
             contents.append(self._make_message("user", f"[대화 요약]\n{summary_text}"))
 
+        long_term_summary = self._clean_text(context.get("long_term_summary"))
+        if long_term_summary:
+            contents.append(self._make_message("user", f"[장기 요약]\n{long_term_summary}"))
+
         session_context = context.get("session_context") or {}
         session_lines = [f"{key}: {value}" for key, value in session_context.items() if value is not None]
         if session_lines:
