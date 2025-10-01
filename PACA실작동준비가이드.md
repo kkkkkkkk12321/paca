@@ -13,9 +13,9 @@
 ## 📊 현재 상태 분석
 
 ### 🎯 코드베이스 현황
-- **총 Python 파일**: 320개 *(tests 포함)*
-- **미완성 구현**: 이벤트 버스·추론 엔진·메모리 계층은 동작하지만 TODO/FIXME/`NotImplemented`가 남아 있으며(`scripts/setup_packaging.py` 실행 검증 TODO, `cognitive/memory/longterm.py` 비-SQLite 어댑터 등), 일부 경로는 실험용 프롬프트에 의존합니다.
-- **핵심 모듈 동작 범위**: CLI/GUI, 도구 안전 정책, Gemini LLM 연동, 협업 정책 병합, 자동 학습 파이프라인, ReasoningChain 백트래킹 등은 작동하나 다중 LLM 전환·장기 학습 파이프라인·배포 검증 자동화는 진행 중입니다.
+- **총 Python 파일**: 191개 *(tests 포함)*
+- **미완성 구현**: 이벤트 버스·추론 엔진·메모리 계층은 기본 동작하지만 TODO/FIXME/`NotImplemented`가 일부 남아 있습니다(`scripts/setup_packaging.py` 고급 검증, `cognitive/memory/longterm.py` 비-SQLite 어댑터 확장 등).
+- **핵심 모듈 동작 범위**: CLI/GUI, 도구 안전 정책, Gemini LLM 연동, 정책 병합, 자동 학습 파이프라인, ReasoningChain 백트래킹 등 주요 경로는 가동되지만, 다중 LLM 전환·장기 학습 파이프라인·배포 검증 자동화 등은 계속 개발 중입니다.
 
 ### ⚠️ 남아 있는 주요 차단 과제
 1. **LLM 다중 공급자/고급 폴백 미구현** – 현재는 Gemini 단일 경로와 규칙 기반 폴백만 제공되어 다른 모델 호출·결과 병합이 불가능합니다.
