@@ -10,7 +10,6 @@ import argparse
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
-
 import paca.cognitive._enable_collab_patch
 
 try:  # Optional dependency (only needed for YAML overrides)
@@ -19,7 +18,7 @@ except Exception:  # pragma: no cover - YAML support is optional at runtime
     yaml = None
 
 # UTF-8 인코딩 설정 (Windows 호환성)
-if os.name == "nt":  # Windows
+if os.name == 'nt':  # Windows
     try:
         # Python 3.7+ 에서 UTF-8 모드 활성화
         sys.stdout.reconfigure(encoding="utf-8")
@@ -181,57 +180,7 @@ async def main_async():
     logger = StructuredLogger("PacaMain")
 
     try:
-        # 설정 생성
-        config = PacaConfig()
-        overrides: Optional[Dict[str, Any]] = None
-
-        # 사용자 지정 구성 로드
-        if args.config:
-            try:
-                overrides = _load_user_config(args.config)
-            except FileNotFoundError:
-                parser.error(f"설정 파일을 찾을 수 없습니다: {args.config}")
-            except ValueError as config_error:
-                parser.error(str(config_error))
-            except Exception as unexpected_error:  # pragma: no cover - safety net
-                parser.error(
-                    f"설정 파일을 읽는 중 오류가 발생했습니다: {unexpected_error}"
-                )
-
-        # === 추가: 협업 재시도 정책 JSON 로드 ===
-        from paca.cognitive._collab_policy_loader import load_policy, apply_to_config
-
-        policy = load_policy()
-        apply_to_config(config, policy)
-        # =======================================
-
-        # 사용자 오버라이드 적용 (있을 때만)
-        if overrides:
-            _apply_overrides(config, overrides)
-
-        # === 추가: 현재 임계값들 디버그 프린트 ===
-        try:
-            print(
-                "[CFG] thresholds:",
-                "reasoning=",
-                getattr(config, "reasoning_confidence_threshold", None),
-                "backtrack=",
-                getattr(config, "backtrack_confidence_threshold", None),
-                "switch=",
-                getattr(config, "strategy_switch_confidence_threshold", None),
-                "escal_min=",
-                (getattr(config, "escalation", {}) or {}).get("min_confidence"),
-            )
-        except Exception:
-            pass
-        # =======================================
-
-        if args.debug:
-            config.log_level = "DEBUG"
-            setattr(config, "debug", True)
-        else:
-            config.log_level = args.log_level
-            setattr(config, "debug", False)
+        config = _build_runtime_config(args, parser, logger)
 
         # GUI 모드
         if args.gui:
@@ -266,7 +215,8 @@ async def main_async():
     except KeyboardInterrupt:
         print("\n👋 프로그램을 종료합니다.")
     except Exception as e:
-        logger.error(f"메인 실행 중 오류: {str(e)}")
+        logger.exception("메인 실행 중 오류", exc_info=e)
+
         print(f"❌ 실행 중 오류가 발생했습니다: {str(e)}")
         sys.exit(1)
 
@@ -288,6 +238,7 @@ if __name__ == "__main__":
 
 def _load_user_config(path: Path) -> Dict[str, Any]:
     """Load a user-specified configuration file."""
+
     if not path.exists():
         raise FileNotFoundError(str(path))
 
@@ -300,9 +251,8 @@ def _load_user_config(path: Path) -> Dict[str, Any]:
             data = json.load(handle)
     elif suffix in {".yaml", ".yml"}:
         if yaml is None:
-            raise ValueError(
-                "YAML 설정을 로드하려면 PyYAML이 필요합니다. 'pip install pyyaml'을 실행하세요."
-            )
+            raise ValueError("YAML 설정을 로드하려면 PyYAML이 필요합니다. 'pip install pyyaml'을 실행하세요.")
+
         with path.open("r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle)
     else:
@@ -396,3 +346,63 @@ def _apply_overrides(config: PacaConfig, overrides: Dict[str, Any]) -> None:
 
         if not _set_attr(key, value):
             setattr(config, key, value)
+
+def _build_runtime_config(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    logger: StructuredLogger,
+) -> PacaConfig:
+    """Construct and return a configured ``PacaConfig`` instance for this run."""
+
+    config = PacaConfig()
+
+    overrides: Optional[Dict[str, Any]] = None
+
+    if args.config:
+        try:
+            overrides = _load_user_config(args.config)
+        except FileNotFoundError:
+            parser.error(f"설정 파일을 찾을 수 없습니다: {args.config}")
+        except ValueError as config_error:
+            parser.error(str(config_error))
+        except Exception as unexpected_error:  # pragma: no cover - safety net
+            parser.error(
+                f"설정 파일을 읽는 중 오류가 발생했습니다: {unexpected_error}"
+            )
+
+    from paca.cognitive._collab_policy_loader import (  # pylint: disable=import-outside-toplevel
+        apply_to_config,
+        load_policy,
+    )
+
+    policy = load_policy()
+    apply_to_config(config, policy)
+
+    if overrides:
+        _apply_overrides(config, overrides)
+
+    if args.debug:
+        config.log_level = "DEBUG"
+        setattr(config, "debug", True)
+    else:
+        config.log_level = args.log_level
+        setattr(config, "debug", False)
+
+    try:
+        logger.debug(
+            "활성 임계값",
+            extra={
+                "reasoning": getattr(config, "reasoning_confidence_threshold", None),
+                "backtrack": getattr(config, "backtrack_confidence_threshold", None),
+                "strategy_switch": getattr(
+                    config, "strategy_switch_confidence_threshold", None
+                ),
+                "escalation_min": (getattr(config, "escalation", {}) or {}).get(
+                    "min_confidence"
+                ),
+            },
+        )
+    except Exception:  # pragma: no cover - defensive logging only
+        pass
+
+    return config
