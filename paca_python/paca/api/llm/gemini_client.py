@@ -257,10 +257,12 @@ class GeminiClientManager(LLMInterface):
         """캐시 키 생성"""
         cache_data = {
             "prompt": request.prompt,
+            "system_prompt": request.system_prompt,
+            "context": request.context,
             "model": request.model.value,
             "config": request.config.to_dict() if request.config else {}
         }
-        return str(hash(json.dumps(cache_data, sort_keys=True)))
+        return str(hash(json.dumps(cache_data, sort_keys=True, default=str)))
 
     def _is_cache_valid(self, cache_key: str) -> bool:
         """캐시 유효성 확인"""
@@ -269,6 +271,91 @@ class GeminiClientManager(LLMInterface):
 
         timestamp = self.cache_timestamps.get(cache_key, 0)
         return time.time() - timestamp < self.config.cache_ttl
+
+    def _prepare_request_payload(self, request: LLMRequest, generation_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Gemini SDK 호출에 사용할 파라미터 구성"""
+        contents = self._build_contents_from_request(request)
+
+        payload: Dict[str, Any] = {
+            "model": request.model.value,
+            "contents": contents,
+            "config": generation_config,
+        }
+
+        if request.system_prompt:
+            payload["system_instruction"] = request.system_prompt
+
+        if self.config.safety_settings:
+            payload["safety_settings"] = self.config.safety_settings
+
+        return payload
+
+    def _build_contents_from_request(self, request: LLMRequest) -> List[Dict[str, Any]]:
+        """요청 컨텍스트와 현재 프롬프트를 Gemini 메시지 배열로 변환"""
+        contents: List[Dict[str, Any]] = []
+        context = request.context or {}
+
+        # 1) 명시적으로 전달된 prior_messages 우선 사용
+        prior_messages = context.get("prior_messages") or []
+        for message in prior_messages:
+            text = self._clean_text(message.get("content"))
+            if not text:
+                continue
+            role = self._normalize_role(message.get("role"))
+            contents.append(self._make_message(role, text))
+
+        # 2) recent_history를 user/model 턴으로 변환
+        for exchange in context.get("recent_history", []) or []:
+            user_turn = self._clean_text(exchange.get("user_input"))
+            assistant_turn = self._clean_text(exchange.get("assistant_response"))
+
+            if user_turn:
+                contents.append(self._make_message("user", user_turn))
+            if assistant_turn:
+                contents.append(self._make_message("model", assistant_turn))
+
+        # 3) 요약/세션/선호도 등 추가 컨텍스트
+        summary_text = self._clean_text(context.get("context_summary"))
+        if summary_text:
+            contents.append(self._make_message("user", f"[대화 요약]\n{summary_text}"))
+
+        session_context = context.get("session_context") or {}
+        session_lines = [f"{key}: {value}" for key, value in session_context.items() if value is not None]
+        if session_lines:
+            contents.append(self._make_message("user", "[세션 정보]\n" + "\n".join(session_lines)))
+
+        user_preferences = context.get("user_preferences") or {}
+        preference_lines = [f"{key}: {value}" for key, value in user_preferences.items() if value is not None]
+        if preference_lines:
+            contents.append(self._make_message("user", "[사용자 선호]\n" + "\n".join(preference_lines)))
+
+        # 4) 현재 사용자 입력을 항상 마지막에 배치
+        prompt_text = self._clean_text(request.prompt)
+        contents.append(self._make_message("user", prompt_text or ""))
+
+        return contents
+
+    @staticmethod
+    def _make_message(role: str, text: str) -> Dict[str, Any]:
+        return {
+            "role": role,
+            "parts": [{"text": text}]
+        }
+
+    @staticmethod
+    def _clean_text(value: Optional[str]) -> str:
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @staticmethod
+    def _normalize_role(role: Optional[str]) -> str:
+        if not role:
+            return "user"
+        role_lower = str(role).lower()
+        if role_lower in {"model", "assistant"}:
+            return "model"
+        return "user"
 
     async def _make_request_with_retry(self, request: LLMRequest) -> Result[GeminiResponse]:
         """재시도 로직을 포함한 요청 처리"""
@@ -288,12 +375,12 @@ class GeminiClientManager(LLMInterface):
 
                 start_time = time.time()
 
+                request_payload = self._prepare_request_payload(request, generation_config)
+
                 # 요청 실행
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model=request.model.value,
-                    contents=request.prompt,
-                    config=generation_config
+                    **request_payload
                 )
 
                 processing_time = time.time() - start_time
@@ -377,19 +464,15 @@ class GeminiClientManager(LLMInterface):
     ) -> Result[LLMResponse]:
         """컨텍스트를 포함한 텍스트 생성"""
 
-        # 컨텍스트를 포함한 프롬프트 구성
-        context_text = ""
-        for ctx in context:
-            role = ctx.get("role", "user")
-            content = ctx.get("content", "")
-            context_text += f"{role}: {content}\n"
-
-        full_prompt = f"{context_text}\nuser: {prompt}"
+        request_context = {
+            "prior_messages": context
+        } if context else {}
 
         request = LLMRequest(
-            prompt=full_prompt,
+            prompt=prompt,
             model=model or self.config.default_model,
-            config=config or self.config.generation_config
+            config=config or self.config.generation_config,
+            context=request_context
         )
 
         return await self.generate_text(request)

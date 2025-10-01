@@ -631,8 +631,14 @@ class PacaSystem:
                         "잠시 뒤 다시 시도하거나, 다른 모델/키로 전환해주세요."
                     )
 
-                # 그 외 에러는 짧은 안내
-                return "죄송해요, 잠시 문제가 생겼어요. 다시 한 번 시도해 주세요."
+                # 그 외 에러는 규칙 기반 분석으로 대응
+                return self._generate_fallback_response(
+                    {
+                        "failure_reason": s or e.__class__.__name__,
+                        "confidence": 0.35,
+                    },
+                    message,
+                )
 
 
 
@@ -997,25 +1003,132 @@ class PacaSystem:
         return prompt
 
     def _generate_fallback_response(self, cognitive_data: Dict[str, Any], original_message: str) -> str:
-        """LLM 없이 기본 응답 생성 (백업용)"""
-        confidence = cognitive_data.get("confidence", 0.5)
+        """LLM 실패 시 규칙 기반 분석으로 응답 생성"""
+        import re
+        from collections import Counter
 
-        if confidence > 0.8:
-            base_response = "네, 이해했습니다. "
-        elif confidence > 0.5:
-            base_response = "제가 이해한 바로는 "
-        else:
-            base_response = "죄송하지만 명확하게 이해하지 못했습니다. "
+        message = (original_message or "").strip()
+        if not message:
+            return "내부 분석을 수행할 수 있는 정보가 부족해요. 요청을 조금 더 구체적으로 설명해 주세요."
 
-        # 간단한 패턴 매칭 응답
-        if "안녕" in original_message:
-            return "안녕하세요! PACA AI 어시스턴트입니다. 무엇을 도와드릴까요?"
-        elif "계산" in original_message or any(char.isdigit() for char in original_message):
-            return base_response + "수학적 계산을 도와드릴 수 있습니다. 구체적인 식을 알려주세요."
-        elif "?" in original_message or "질문" in original_message:
-            return base_response + "질문에 대해 생각해보고 답변드리겠습니다."
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?\?\n])\s+", message) if s.strip()]
+        summary = sentences[0] if sentences else message[:120]
+        if len(summary) > 120:
+            summary = summary[:117] + "..."
+
+        tokens = re.findall(r"[가-힣a-zA-Z0-9]{2,}", message)
+        stopwords = {
+            "그리고", "하지만", "그러나", "그래서", "이어서", "그리고", "그러면", "그러니까",
+            "하면", "하면요", "위해", "대한", "어떤", "어떻게", "무엇", "어디", "어느",
+            "정도", "조금", "이번", "관련", "사용", "가능", "필요", "있는", "없는",
+            "합니다", "하세요", "해주세요", "있나요", "있을까요", "해주세요", "같아요",
+        }
+        normalized_tokens = [token.lower() for token in tokens if token.lower() not in stopwords]
+        keywords = [token for token, _ in Counter(normalized_tokens).most_common(5)]
+
+        question_detected = bool(re.search(r"[?？]$", message) or re.search(r"\b(why|how|what|when|who|where)\b", message, re.IGNORECASE) or re.search(r"(왜|어떻게|무엇|몇|어디|누가)", message))
+        task_detected = bool(re.search(r"(만들|구현|설계|작성|코드|빌드|제작)", message))
+        issue_detected = bool(re.search(r"(문제|오류|에러|버그|고장|실패)", message))
+
+        intents: List[str] = []
+        if question_detected:
+            intents.append("정보/질문")
+        if task_detected:
+            intents.append("실행/구현")
+        if issue_detected:
+            intents.append("문제 해결")
+        if not intents:
+            intents.append("일반 대화")
+
+        base_confidence = cognitive_data.get("confidence")
+        if base_confidence is None:
+            base_confidence = 0.45 + min(len(keywords) * 0.05, 0.2)
+            if question_detected:
+                base_confidence += 0.05
+            if issue_detected:
+                base_confidence += 0.05
+            base_confidence = max(0.35, min(base_confidence, 0.85))
+
+        analysis_lines: List[str] = []
+        analysis_lines.append(f"의도 분류: {', '.join(intents)}")
+        if keywords:
+            analysis_lines.append(f"핵심 키워드: {', '.join(keywords)}")
+
+        if len(message) > 200:
+            analysis_lines.append(f"요청 길이: {len(message)}자 (정보량이 많음)")
+        elif len(message) < 40:
+            analysis_lines.append("요청 길이: 짧음 (추가 정보 필요 가능)")
+
+        recent_context = []
+        if getattr(self, "conversation_history", None):
+            user_turns = [
+                m.content for m in reversed(self.conversation_history)
+                if getattr(m, "sender", "user") == "user"
+            ]
+            if user_turns:
+                # 최근 현재 메시지를 제외한 이전 사용자 메시지들을 참조
+                previous_messages = [turn for turn in user_turns[1:4] if turn != message]
+                if previous_messages:
+                    condensed = " | ".join(prev[:40] + ("..." if len(prev) > 40 else "") for prev in reversed(previous_messages))
+                    recent_context.append(f"이전 흐름: {condensed}")
+
+        plan_steps: List[str] = []
+        plan_steps.append("요청 의도를 명확히 정리하고 필요한 가정을 세웁니다.")
+        if question_detected:
+            plan_steps.append("질문에 답하기 위해 필요한 정보/근거 목록을 작성합니다.")
+        if task_detected:
+            plan_steps.append("실행 가능한 절차나 코드를 단계별로 설계합니다.")
+        if issue_detected:
+            plan_steps.append("문제 재현 조건과 해결 전략을 점검합니다.")
+        plan_steps.append("부족한 정보는 후속 질문으로 확보하고, 대화 로그에 학습 메모를 남깁니다.")
+
+        closing: str
+        if base_confidence >= 0.7:
+            closing = "현재 규칙 기반 추정 신뢰도는 높지만, 세부 확인을 위해 추가 설명을 부탁드릴 수 있습니다."
+        elif base_confidence >= 0.5:
+            closing = "규칙 기반 추정 신뢰도는 중간 수준입니다. 중요한 세부사항이 있다면 공유해 주세요."
         else:
-            return base_response + "말씀하신 내용에 대해 더 자세히 설명해 주시면 도움을 드릴 수 있습니다."
+            closing = "규칙 기반 추정 신뢰도가 낮아 추가 맥락이 필요합니다. 더 구체적으로 알려주시면 학습에 도움이 됩니다."
+
+        failure_reason = cognitive_data.get("failure_reason")
+
+        observation = {
+            "message": message[:200],
+            "keywords": keywords,
+            "confidence": round(base_confidence, 2),
+            "intents": intents,
+            "failure_reason": failure_reason,
+            "timestamp": datetime.now().isoformat(),
+        }
+        fallback_memory = self.user_context.setdefault("fallback_observations", [])
+        fallback_memory.append(observation)
+        if len(fallback_memory) > 25:
+            del fallback_memory[0]
+
+        response_lines: List[str] = [
+            "LLM 엔진 호출이 실패해 PACA의 규칙 기반 분석으로 응답드립니다.",
+            f"요청 요약: {summary}",
+        ]
+
+        if recent_context:
+            response_lines.extend(recent_context)
+
+        if analysis_lines:
+            response_lines.append("상황 해석:")
+            response_lines.extend(f"- {line}" for line in analysis_lines)
+
+        if plan_steps:
+            response_lines.append("대응 계획:")
+            response_lines.extend(f"{index}. {step}" for index, step in enumerate(plan_steps, start=1))
+
+        response_lines.append(closing)
+
+        if failure_reason:
+            response_lines.append(f"(참고: LLM 오류로 자동 대체됨 - {failure_reason})")
+
+        response_lines.append("대화를 이어가면 학습 메모를 바탕으로 더 나은 답변을 준비하겠습니다.")
+
+        return "\n".join(response_lines)
 
     async def _setup_event_handlers(self):
         """이벤트 핸들러 설정"""

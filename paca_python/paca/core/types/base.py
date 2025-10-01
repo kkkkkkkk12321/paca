@@ -1,13 +1,9 @@
-"""
-Base Types Module
-시스템 전반에서 사용되는 기본 공통 타입 정의
-"""
+"""Base type definitions that are shared across the PACA runtime."""
 
 from typing import TypeVar, Generic, Union, Optional, Dict, Any, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import time
-from abc import ABC
 
 # 시스템 내 고유 식별자
 ID = str
@@ -25,10 +21,12 @@ KeyValuePair = Dict[str, Any]
 
 @dataclass(frozen=True)
 class Result(Generic[T]):
-    """성공/실패 결과를 나타내는 제네릭 클래스"""
+    """Container describing whether an operation succeeded and any payload."""
+
     is_success: bool
     data: Optional[T] = None
-    error: Optional[Exception] = None
+    error: Optional[Union[str, Exception]] = None
+    metadata: KeyValuePair = field(default_factory=dict)
 
     @property
     def is_failure(self) -> bool:
@@ -41,12 +39,16 @@ class Result(Generic[T]):
         raise ValueError("Cannot access value of failed result")
 
     @classmethod
-    def success(cls, data: T) -> 'Result[T]':
-        return cls(is_success=True, data=data)
+    def success(
+        cls, data: T, *, metadata: Optional[KeyValuePair] = None
+    ) -> "Result[T]":
+        return cls(is_success=True, data=data, error=None, metadata=metadata or {})
 
     @classmethod
-    def failure(cls, error: Exception) -> 'Result[T]':
-        return cls(is_success=False, error=error)
+    def failure(
+        cls, error: Union[str, Exception], *, metadata: Optional[KeyValuePair] = None
+    ) -> "Result[T]":
+        return cls(is_success=False, error=error, metadata=metadata or {})
 
 
 class LogLevel(Enum):
@@ -174,18 +176,28 @@ def generate_id(prefix: str = "") -> ID:
 
 
 # Result helper functions
-def create_success(data: T) -> Result[T]:
+def create_success(
+    data: T, metadata: Optional[KeyValuePair] = None
+) -> Result[T]:
     """성공 결과 생성"""
-    return Result(is_success=True, data=data, error=None)
+
+    return Result(is_success=True, data=data, error=None, metadata=metadata or {})
 
 
-def create_failure(error: Exception) -> Result[None]:
+def create_failure(
+    error: Union[str, Exception], metadata: Optional[KeyValuePair] = None
+) -> Result[None]:
     """실패 결과 생성"""
-    return Result(is_success=False, data=None, error=error)
+
+    return Result(is_success=False, data=None, error=error, metadata=metadata or {})
 
 
-def create_result(success: bool, data: Optional[T] = None, error: Optional[str] = None,
-                 metadata: Optional[KeyValuePair] = None) -> Result[T]:
+def create_result(
+    success: bool,
+    data: Optional[T] = None,
+    error: Optional[Union[str, Exception]] = None,
+    metadata: Optional[KeyValuePair] = None,
+) -> Result[T]:
     """Result 객체 생성 헬퍼"""
     return Result(
         is_success=success,
