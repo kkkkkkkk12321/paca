@@ -98,10 +98,12 @@ async def test_generate_text_includes_system_prompt_and_context(stubbed_genai):
         model=ModelType.GEMINI_FLASH,
         config=GenerationConfig(temperature=0.3, max_tokens=128),
         context={
+
             "prior_messages": [
                 {"role": "user", "content": "사전 질문"},
                 {"role": "assistant", "content": "사전 답변"},
             ],
+
             "recent_history": [
                 {"user_input": "첫 번째 질문", "assistant_response": "첫 번째 답변"},
             ],
@@ -109,6 +111,7 @@ async def test_generate_text_includes_system_prompt_and_context(stubbed_genai):
             "session_context": {"topic": "과학"},
             "user_preferences": {"tone": "친절하게"},
             "long_term_summary": "오랜 대화 요약",
+
         },
     )
 
@@ -126,6 +129,7 @@ async def test_generate_text_includes_system_prompt_and_context(stubbed_genai):
         item["parts"][0]["text"] == "첫 번째 질문"
         for item in contents
     )
+
     assert any(
         item["role"] == "model" and item["parts"][0]["text"] == "첫 번째 답변"
         for item in contents
@@ -141,6 +145,7 @@ async def test_generate_text_includes_system_prompt_and_context(stubbed_genai):
     )
     assert long_term_entry is not None
     assert "오랜 대화 요약" in long_term_entry["parts"][0]["text"]
+
     assert contents[-1]["parts"][0]["text"] == "현재 질문"
 
 

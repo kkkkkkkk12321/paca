@@ -457,6 +457,7 @@ class PacaSystem:
 
             if learning_summary:
                 analysis_payload["learning"] = learning_summary
+
                 preference_updates = learning_summary.get("preference_updates")
                 if (
                     preference_updates
@@ -466,6 +467,7 @@ class PacaSystem:
                     self.response_processor.context_manager.update_user_preferences(
                         preference_updates
                     )
+
 
             result_data = {
                 "response": response_text,
@@ -853,7 +855,9 @@ class PacaSystem:
             confidence_sum = 0.0
             persisted = 0
             sample_insights: List[str] = []
+
             preference_updates: Dict[str, Any] = {}
+
 
             for point in learning_points:
                 category_counter[point.category.value] += 1
@@ -864,9 +868,11 @@ class PacaSystem:
                     persisted += 1
                 if self._conversation_memory_adapter:
                     self._conversation_memory_adapter.store_learning_point(point)
+
                 if point.category == LearningCategory.USER_PREFERENCE:
                     preference_key = point.context or "general"
                     preference_updates[preference_key] = point.extracted_knowledge
+
 
             self.performance_metrics["learning_sessions"] += 1
             self.recent_learning_points.extend(point.id for point in learning_points)
@@ -882,8 +888,10 @@ class PacaSystem:
             if sample_insights:
                 summary["sample_insights"] = sample_insights[:3]
 
+
             if preference_updates:
                 summary["preference_updates"] = preference_updates
+
 
             try:
                 knowledge = self.auto_learning_system.get_generated_knowledge()

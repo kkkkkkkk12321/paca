@@ -258,7 +258,7 @@ class ContextManager:
             return "No previous conversation history."
 
         summary_lines: List[str] = []
-
+          
         if self.long_term_summary:
             summary_lines.append(f"[장기 요약] {self.long_term_summary}")
 
@@ -277,7 +277,9 @@ class ContextManager:
             return "No recent conversation details available."
 
         joined = " | ".join(summary_lines)
+
         return joined[: self.summary_max_chars]
+
 
     def update_user_preferences(self, preferences: Dict[str, Any]) -> None:
         """사용자 선호도 업데이트"""
