@@ -21,17 +21,18 @@ except Exception:  # pragma: no cover - YAML support is optional at runtime
 if os.name == 'nt':  # Windows
     try:
         # Python 3.7+ 에서 UTF-8 모드 활성화
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
     except AttributeError:
         # 이전 버전 Python 지원
         import codecs
-        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
-        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer)
+
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer)
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer)
 
     # 콘솔 코드페이지를 UTF-8로 설정
     try:
-        os.system('chcp 65001')
+        os.system("chcp 65001")
     except Exception:
         pass
 
@@ -52,50 +53,30 @@ Examples:
   paca --message "안녕하세요"   단일 메시지 처리
   paca --config config.json    설정 파일 지정
   paca --version               버전 정보 표시
-        """
+        """,
     )
 
-    parser.add_argument(
-        "--version",
-        action="version",
-        version="PACA v5.0.0"
-    )
+    parser.add_argument("--version", action="version", version="PACA v5.0.0")
 
     parser.add_argument(
-        "--interactive", "-i",
-        action="store_true",
-        help="대화형 모드로 실행"
+        "--interactive", "-i", action="store_true", help="대화형 모드로 실행"
     )
 
-    parser.add_argument(
-        "--gui", "-g",
-        action="store_true",
-        help="GUI 애플리케이션 실행"
-    )
+    parser.add_argument("--gui", "-g", action="store_true", help="GUI 애플리케이션 실행")
+
+    parser.add_argument("--message", "-m", type=str, help="처리할 단일 메시지")
+
+    parser.add_argument("--config", "-c", type=Path, help="설정 파일 경로")
 
     parser.add_argument(
-        "--message", "-m",
-        type=str,
-        help="처리할 단일 메시지"
-    )
-
-    parser.add_argument(
-        "--config", "-c",
-        type=Path,
-        help="설정 파일 경로"
-    )
-
-    parser.add_argument(
-        "--debug", "-d",
-        action="store_true",
-        help="디버그 모드 활성화"
+        "--debug", "-d", action="store_true", help="디버그 모드 활성화"
     )
 
     parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
-        help="로그 레벨 설정"
+        help="로그 레벨 설정",
     )
 
     return parser
@@ -111,7 +92,7 @@ async def run_interactive_mode(paca_system: PacaSystem):
             try:
                 user_input = input("You: ").strip()
 
-                if user_input.lower() in ['quit', 'exit', 'q']:
+                if user_input.lower() in ["quit", "exit", "q"]:
                     print("👋 안녕히 가세요!")
                     break
 
@@ -126,11 +107,12 @@ async def run_interactive_mode(paca_system: PacaSystem):
                     print(f"PACA: {response}")
 
                     # 성능 정보 표시 (디버그 모드에서만)
-                    if hasattr(paca_system.config, 'debug') and paca_system.config.debug:
+                    if getattr(paca_system.config, "debug", False):
                         processing_time = result.data.get("processing_time", 0)
                         confidence = result.data.get("confidence", 0)
-                        print(f"       (처리시간: {processing_time:.3f}s, 신뢰도: {confidence:.2f})")
-
+                        print(
+                            f"       (처리시간: {processing_time:.3f}s, 신뢰도: {confidence:.2f})"
+                        )
                 else:
                     print(f"❌ 오류: {result.error}")
 
@@ -160,8 +142,10 @@ async def process_single_message(paca_system: PacaSystem, message: str):
             processing_time = result.data.get("processing_time", 0)
             confidence = result.data.get("confidence", 0)
             if processing_time > 0:
-                print(f"\n처리시간: {processing_time:.3f}s, 신뢰도: {confidence:.2f}", file=sys.stderr)
-
+                print(
+                    f"\n처리시간: {processing_time:.3f}s, 신뢰도: {confidence:.2f}",
+                    file=sys.stderr,
+                )
         else:
             print(f"오류: {result.error}", file=sys.stderr)
             sys.exit(1)
@@ -175,6 +159,7 @@ def run_gui():
     """GUI 애플리케이션 실행"""
     try:
         from desktop_app.main import main as gui_main
+
         print("🖥️ GUI 애플리케이션을 시작합니다...")
         gui_main()
     except ImportError:
@@ -217,11 +202,9 @@ async def main_async():
         if args.message:
             # 단일 메시지 모드
             await process_single_message(paca_system, args.message)
-
         elif args.interactive:
             # 대화형 모드
             await run_interactive_mode(paca_system)
-
         else:
             # 기본: 도움말 표시
             parser.print_help()
@@ -233,6 +216,7 @@ async def main_async():
         print("\n👋 프로그램을 종료합니다.")
     except Exception as e:
         logger.exception("메인 실행 중 오류", exc_info=e)
+
         print(f"❌ 실행 중 오류가 발생했습니다: {str(e)}")
         sys.exit(1)
 
@@ -362,7 +346,6 @@ def _apply_overrides(config: PacaConfig, overrides: Dict[str, Any]) -> None:
 
         if not _set_attr(key, value):
             setattr(config, key, value)
-
 
 def _build_runtime_config(
     args: argparse.Namespace,
