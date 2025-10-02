@@ -63,8 +63,9 @@ class OpsMonitoringBridge:
 
         lock = self._write_lock
         lock_loop = self._write_lock_loop
-        if lock is not None and lock_loop is current_loop and not current_loop.is_closed():
-            return lock
+        if lock is not None and lock_loop is current_loop:
+            if not lock_loop.is_closed():
+                return lock
 
         with self._lock_guard:
             lock = self._write_lock
