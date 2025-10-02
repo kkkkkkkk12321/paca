@@ -192,7 +192,7 @@ def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path
         enable_korean_nlp=False,
     )
 
-    for _ in range(2):
+    for _ in range(3):
         asyncio.run(system._save_learning_data())
 
     monitoring_snapshot = tmp_path / "monitoring" / "learning_snapshot.json"

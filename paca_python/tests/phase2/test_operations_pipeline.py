@@ -125,7 +125,7 @@ def test_ops_monitoring_bridge_survives_multiple_asyncio_run_calls(tmp_path: Pat
         ],
     )
 
-    for _ in range(2):
+    for _ in range(3):
         asyncio.run(bridge.publish(result))
 
     payload = json.loads((tmp_path / "ops.json").read_text(encoding="utf-8"))
@@ -151,7 +151,7 @@ def test_operations_pipeline_survives_multiple_asyncio_run_calls(tmp_path: Path)
         monitoring_bridge=OpsMonitoringBridge(export_path=monitoring_path),
     )
 
-    for _ in range(2):
+    for _ in range(3):
         result = asyncio.run(pipeline.run())
         assert result.success
 
