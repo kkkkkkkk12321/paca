@@ -125,11 +125,20 @@ def test_ops_monitoring_bridge_survives_multiple_asyncio_run_calls(tmp_path: Pat
         ],
     )
 
+    lock_ids = []
+    observed_closed_states = []
+
     for _ in range(3):
         asyncio.run(bridge.publish(result))
+        assert bridge._write_lock is not None
+        assert bridge._write_lock_loop is not None
+        lock_ids.append(id(bridge._write_lock))
+        observed_closed_states.append(bridge._write_lock_loop.is_closed())
 
     payload = json.loads((tmp_path / "ops.json").read_text(encoding="utf-8"))
     assert payload["components"]["phase_regression"]["status"] == "passed"
+    assert len(set(lock_ids)) == 3, "new asyncio loops should trigger new lock objects"
+    assert all(observed_closed_states), "each event loop should be closed after asyncio.run"
 
 
 def test_operations_pipeline_survives_multiple_asyncio_run_calls(tmp_path: Path):

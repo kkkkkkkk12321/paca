@@ -192,11 +192,20 @@ def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path
         enable_korean_nlp=False,
     )
 
+    lock_ids = []
+
     for _ in range(3):
         asyncio.run(system._save_learning_data())
+        synchronizer = system._learning_synchronizer
+        assert isinstance(synchronizer, FileLearningDataSynchronizer)
+        assert synchronizer._lock is not None
+        assert synchronizer._lock_loop is not None
+        lock_ids.append(id(synchronizer._lock))
+        assert synchronizer._lock_loop.is_closed(), "asyncio.run should close each event loop"
 
     monitoring_snapshot = tmp_path / "monitoring" / "learning_snapshot.json"
     assert monitoring_snapshot.exists(), "default synchronizer should persist snapshot across event loops"
+    assert len(set(lock_ids)) == 3, "new asyncio loops should rotate synchronizer locks"
 
 
 def test_file_learning_data_synchronizer_initializes_without_event_loop(tmp_path: Path):
