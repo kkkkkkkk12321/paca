@@ -153,3 +153,17 @@ async def test_concurrent_saves_capture_mutations(tmp_path: Path):
 
     assert any(entry.get("metadata", {}).get("note") == "updated" for entry in tactics_data)
     assert any("conversation-2" in entry.get("source_conversations", []) for entry in heuristics_data)
+
+
+def test_auto_learning_system_instantiation_without_running_loop(tmp_path: Path):
+    system = AutoLearningSystem(
+        database=_StubDatabase(),
+        conversation_memory=_StubConversationMemory(),
+        storage_path=str(tmp_path),
+        enable_korean_nlp=False,
+    )
+
+    async def invoke_save() -> None:
+        await system._save_learning_data()
+
+    asyncio.run(invoke_save())

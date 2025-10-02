@@ -83,8 +83,8 @@ class AutoLearningSystem:
         # 학습 패턴 정의 (한국어 최적화)
         self.learning_patterns = self._initialize_korean_patterns()
 
-        # 저장 동기화 락
-        self._save_lock = asyncio.Lock()
+        # 저장 동기화 락 (지연 초기화)
+        self._save_lock: Optional[asyncio.Lock] = None
 
         # 데이터 로드
         self._load_learning_data()
@@ -663,7 +663,14 @@ class AutoLearningSystem:
 
     async def _save_learning_data(self) -> None:
         """학습 데이터 저장"""
-        async with self._save_lock:
+        lock = self._save_lock
+        if lock is None:
+            # 이벤트 루프가 실행 중일 때만 락을 생성하도록 보장
+            asyncio.get_running_loop()
+            lock = asyncio.Lock()
+            self._save_lock = lock
+
+        async with lock:
             try:
                 learning_points_file = self.storage_path / "learning_points.json"
                 learning_points_data = []
