@@ -102,6 +102,7 @@ class AutoLearningSystem:
                 learning_synchronizer,
             )
 
+
         # 데이터 로드
         self._load_learning_data()
 
@@ -683,6 +684,7 @@ class AutoLearningSystem:
             self._save_lock = asyncio.Lock()
 
         async with self._save_lock:
+
             try:
                 learning_points_file = self.storage_path / "learning_points.json"
                 learning_points_data = []
@@ -721,6 +723,7 @@ class AutoLearningSystem:
                     await self._write_json_artifact(path, data)
 
                 await self._sync_learning_snapshot(snapshot)
+
 
             except Exception as e:
                 logger.error(f"Failed to save learning data: {str(e)}")

@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from paca.learning.auto.engine import AutoLearningSystem
 from paca.learning.auto.synchronizer import FileLearningDataSynchronizer, LearningDataSnapshot
+
 from paca.learning.auto.types import (
     GeneratedTactic,
     GeneratedHeuristic,

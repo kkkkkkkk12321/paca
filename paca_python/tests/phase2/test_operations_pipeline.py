@@ -109,3 +109,4 @@ def test_ops_monitoring_bridge_initializes_without_event_loop(tmp_path: Path):
     asyncio.run(bridge.publish(result))
 
     assert (tmp_path / "ops.json").exists(), "monitoring payload should persist in synchronous context"
+

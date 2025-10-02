@@ -10,6 +10,7 @@ import threading
 from typing import Dict, List, Optional, Protocol
 
 
+
 @dataclass
 class LearningDataSnapshot:
     """Immutable snapshot of the auto-learning engine state."""
@@ -43,6 +44,7 @@ class FileLearningDataSynchronizer:
         lock = self._ensure_lock()
 
         async with lock:
+
             await asyncio.to_thread(self._write_snapshot, snapshot)
 
     def _write_snapshot(self, snapshot: LearningDataSnapshot) -> None:
