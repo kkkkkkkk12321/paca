@@ -1,4 +1,6 @@
+import asyncio
 import json
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +12,8 @@ from paca.operations import (
     OperationsPipeline,
     OpsMonitoringBridge,
     PhaseRegressionRunner,
+    PipelineComponentResult,
+    PipelineResult,
     RegressionRunResult,
 )
 
@@ -86,3 +90,23 @@ async def test_phase_regression_runner_accepts_custom_runner(tmp_path: Path):
     assert executed
     assert results[0].module == "tests/custom_module.py"
     assert results[0].status == "passed"
+
+
+def test_ops_monitoring_bridge_initializes_without_event_loop(tmp_path: Path):
+    bridge = OpsMonitoringBridge(export_path=tmp_path / "ops.json")
+    result = PipelineResult(
+        started_at=datetime.utcnow(),
+        finished_at=datetime.utcnow(),
+        components=[
+            PipelineComponentResult(
+                name="phase_regression",
+                status="passed",
+                duration_s=0.1,
+            )
+        ],
+    )
+
+    asyncio.run(bridge.publish(result))
+
+    assert (tmp_path / "ops.json").exists(), "monitoring payload should persist in synchronous context"
+

@@ -12,13 +12,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from paca.learning.auto.engine import AutoLearningSystem
+from paca.learning.auto.synchronizer import FileLearningDataSynchronizer, LearningDataSnapshot
+
 from paca.learning.auto.types import (
     GeneratedTactic,
     GeneratedHeuristic,
     LearningCategory,
     LearningPoint,
 )
-
 
 
 class _StubDatabase:
@@ -162,7 +163,6 @@ async def test_concurrent_saves_capture_mutations(tmp_path: Path):
 
 
 def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
-
     system = AutoLearningSystem(
         database=_StubDatabase(),
         conversation_memory=_StubConversationMemory(),
@@ -182,6 +182,21 @@ def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
         "learning_metrics.json",
     ):
         assert (tmp_path / artifact).exists(), f"{artifact} should be persisted without an active loop at init"
+
+
+def test_file_learning_data_synchronizer_initializes_without_event_loop(tmp_path: Path):
+    synchronizer = FileLearningDataSynchronizer(tmp_path / "snapshot.json")
+    snapshot = LearningDataSnapshot(
+        saved_at=time.time(),
+        learning_points=[],
+        generated_tactics=[],
+        generated_heuristics=[],
+        metrics={},
+    )
+
+    asyncio.run(synchronizer.sync(snapshot))
+
+    assert (tmp_path / "snapshot.json").exists(), "snapshot export should succeed without pre-running loop"
 
 
 class _RecordingSynchronizer:
@@ -224,4 +239,3 @@ async def test_learning_snapshot_synchronizer_receives_data(tmp_path: Path):
     assert monitoring_snapshot.exists()
     exported = json.loads(monitoring_snapshot.read_text(encoding="utf-8"))
     assert exported["learning_points"], "default synchronizer should persist data for monitoring"
-

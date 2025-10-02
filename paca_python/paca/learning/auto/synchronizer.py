@@ -6,7 +6,9 @@ import asyncio
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Protocol
+import threading
+from typing import Dict, List, Optional, Protocol
+
 
 
 @dataclass
@@ -35,10 +37,14 @@ class FileLearningDataSynchronizer:
 
     def __init__(self, export_path: Path) -> None:
         self.export_path = export_path
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+        self._lock_guard = threading.Lock()
 
     async def sync(self, snapshot: LearningDataSnapshot) -> None:
-        async with self._lock:
+        lock = self._ensure_lock()
+
+        async with lock:
+
             await asyncio.to_thread(self._write_snapshot, snapshot)
 
     def _write_snapshot(self, snapshot: LearningDataSnapshot) -> None:
@@ -49,6 +55,18 @@ class FileLearningDataSynchronizer:
         self.export_path.parent.mkdir(parents=True, exist_ok=True)
         serialized = json.dumps(payload, ensure_ascii=False, indent=2)
         self.export_path.write_text(serialized, encoding="utf-8")
+
+    def _ensure_lock(self) -> asyncio.Lock:
+        lock = self._lock
+        if lock is not None:
+            return lock
+
+        with self._lock_guard:
+            lock = self._lock
+            if lock is None:
+                lock = asyncio.Lock()
+                self._lock = lock
+        return lock
 
 
 class CompositeLearningDataSynchronizer:
