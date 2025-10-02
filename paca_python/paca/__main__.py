@@ -215,7 +215,7 @@ async def main_async():
     except KeyboardInterrupt:
         print("\n👋 프로그램을 종료합니다.")
     except Exception as e:
-        logger.exception("메인 실행 중 오류", exc_info=e)
+        logger.exception("메인 실행 중 오류", error=e)
         print(f"❌ 실행 중 오류가 발생했습니다: {str(e)}")
         sys.exit(1)
 

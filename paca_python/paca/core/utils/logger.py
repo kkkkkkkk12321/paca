@@ -299,9 +299,32 @@ class StructuredLogger:
         # keep sync path; some code may call without await
         self._inner.error(message, None, meta or None)
 
+    def exception(self, message: str, **meta) -> None:
+        """Log an exception while preserving stack information."""
+        error = meta.pop("error", None)
+        if error is None and "exc_info" in meta:
+            error = meta.pop("exc_info")
+
+        if error is None:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            if exc_value is not None:
+                error = exc_value
+            else:
+                stack_trace = "".join(traceback.format_stack()[:-1])
+                self._inner._log(LogLevel.ERROR, message, meta or None, stack_trace)
+                return
+
+        self._inner.error(message, error, meta or None)
+
     async def error_async(self, message: str, **meta) -> None:
         # allow `await logger.error_async(...)`
         self._inner.error(message, None, meta or None)
+
+    async def exception_async(self, message: str, **meta) -> None:
+        """Async-compatible alias for ``exception``."""
+        self.exception(message, **meta)
+
+    async_exception = exception_async
 
     # Some code may `await logger.error(...)`; support that too.
     async def __call_error_async_compat(self, message: str, **meta) -> None:
