@@ -199,6 +199,23 @@ def test_file_learning_data_synchronizer_initializes_without_event_loop(tmp_path
     assert (tmp_path / "snapshot.json").exists(), "snapshot export should succeed without pre-running loop"
 
 
+def test_file_learning_data_synchronizer_survives_multiple_asyncio_run_calls(tmp_path: Path):
+    synchronizer = FileLearningDataSynchronizer(tmp_path / "snapshot.json")
+    snapshot = LearningDataSnapshot(
+        saved_at=time.time(),
+        learning_points=[],
+        generated_tactics=[],
+        generated_heuristics=[],
+        metrics={},
+    )
+
+    for _ in range(2):
+        asyncio.run(synchronizer.sync(snapshot))
+
+    payload = json.loads((tmp_path / "snapshot.json").read_text(encoding="utf-8"))
+    assert payload["learning_points"] == []
+
+
 class _RecordingSynchronizer:
     def __init__(self) -> None:
         self.snapshots = []
