@@ -49,7 +49,7 @@ async def test_collaboration_retries_are_invoked_via_helper():
     attempt_history = []
 
     # 강제 사유: forced_validation_failure → abductive/analogical 중 시도
-    _ = await chain._try_collaboration_retries(
+    result = await chain._try_collaboration_retries(
         "forced_validation_failure",
         context,
         attempt_history=attempt_history,
@@ -63,13 +63,16 @@ async def test_collaboration_retries_are_invoked_via_helper():
         assert meta["collab_reason"] == "forced_validation_failure"
     if "attempt" in meta:
         assert isinstance(meta["attempt"], int)
+    assert result is not None
+    assert result.quality_assessment.get("unresolved_validation") is False
 
     # 5) 기본(default) 규칙도 확인
     fe.calls.clear()
-    _ = await chain._try_collaboration_retries(
+    result_default = await chain._try_collaboration_retries(
         None,  # reason_key 없음 → default 규칙 사용
         context,
         attempt_history=attempt_history,
     )
     assert len(fe.calls) >= 1
     assert fe.calls[0][0] in {"deductive"}
+    assert result_default is not None

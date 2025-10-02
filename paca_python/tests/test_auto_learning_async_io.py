@@ -155,7 +155,8 @@ async def test_concurrent_saves_capture_mutations(tmp_path: Path):
     assert any("conversation-2" in entry.get("source_conversations", []) for entry in heuristics_data)
 
 
-def test_auto_learning_system_instantiation_without_running_loop(tmp_path: Path):
+def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
+
     system = AutoLearningSystem(
         database=_StubDatabase(),
         conversation_memory=_StubConversationMemory(),
@@ -163,7 +164,16 @@ def test_auto_learning_system_instantiation_without_running_loop(tmp_path: Path)
         enable_korean_nlp=False,
     )
 
-    async def invoke_save() -> None:
+    async def trigger_save() -> None:
         await system._save_learning_data()
 
-    asyncio.run(invoke_save())
+    asyncio.run(trigger_save())
+
+    for artifact in (
+        "learning_points.json",
+        "generated_tactics.json",
+        "generated_heuristics.json",
+        "learning_metrics.json",
+    ):
+        assert (tmp_path / artifact).exists(), f"{artifact} should be persisted without an active loop at init"
+
