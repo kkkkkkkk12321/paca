@@ -9,7 +9,7 @@ import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import traceback
 
 from ..types.base import LogLevel, Timestamp, KeyValuePair, current_timestamp
@@ -295,17 +295,64 @@ class StructuredLogger:
     # alias commonly used name
     warn = warning
 
+    def _resolve_exception_payload(
+        self,
+        error: Optional[BaseException],
+        meta: Dict[str, Any],
+    ) -> Tuple[Optional[BaseException], Optional[Dict[str, Any]]]:
+        """Prepare exception object and metadata for logging."""
+
+        metadata = dict(meta or {})
+
+        candidate: Optional[BaseException]
+        if error is not None:
+            candidate = error
+        elif "error" in metadata:
+            candidate = metadata.pop("error")  # type: ignore[assignment]
+        else:
+            candidate = sys.exc_info()[1]
+
+        if candidate is not None and not isinstance(candidate, BaseException):
+            candidate = Exception(str(candidate))
+
+        if isinstance(candidate, BaseException):
+            metadata.setdefault("error", str(candidate))
+            return candidate, metadata or None
+
+        return None, metadata or None
+
     def error(self, message: str, **meta) -> None:
         # keep sync path; some code may call without await
-        self._inner.error(message, None, meta or None)
+        metadata = dict(meta or {})
+        error_obj = metadata.pop("error", None)
+        if error_obj is not None and not isinstance(error_obj, BaseException):
+            error_obj = Exception(str(error_obj))
+        if isinstance(error_obj, BaseException):
+            self._inner.error(message, error_obj, metadata or None)
+        else:
+            self._inner.error(message, None, metadata or None)
 
     async def error_async(self, message: str, **meta) -> None:
         # allow `await logger.error_async(...)`
-        self._inner.error(message, None, meta or None)
+        self.error(message, **meta)
+
+    def exception(self, message: str, error: Optional[BaseException] = None, **meta) -> None:
+        """Log an exception with stack trace information."""
+
+        exception_obj, metadata = self._resolve_exception_payload(error, meta)
+        self._inner.error(message, exception_obj, metadata)
+
+    async def exception_async(
+        self, message: str, error: Optional[BaseException] = None, **meta
+    ) -> None:
+        self.exception(message, error=error, **meta)
 
     # Some code may `await logger.error(...)`; support that too.
     async def __call_error_async_compat(self, message: str, **meta) -> None:
-        self._inner.error(message, None, meta or None)
+        self.error(message, **meta)
     # expose the async-compatible name
     async_error = error_async
+
+    # Provide async alias for exception logging
+    async_exception = exception_async
 

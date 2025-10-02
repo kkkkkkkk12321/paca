@@ -6,6 +6,7 @@ LLM 응답의 품질 검증, 안전성 필터링, 컨텍스트 관리를 담당
 import asyncio
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
@@ -187,12 +188,21 @@ class ContentValidator:
 class ContextManager:
     """컨텍스트 관리자"""
 
-    def __init__(self, max_history: int = 20):
-        self.max_history = max_history
+    def __init__(
+        self,
+        max_history: int = 30,
+        summary_window: int = 8,
+        summary_max_chars: int = 1800,
+    ):
+        self.max_history = max(6, max_history)
+        self.summary_window = max(3, summary_window)
+        self.summary_max_chars = max(600, summary_max_chars)
         self.conversation_history: List[Dict[str, Any]] = []
         self.user_preferences: Dict[str, Any] = {}
         self.session_context: Dict[str, Any] = {}
         self.logger = StructuredLogger("ContextManager")
+        self.long_term_summary: str = ""
+        self.topic_counter: Counter[str] = Counter()
 
     async def add_exchange(
         self,
@@ -209,43 +219,75 @@ class ContextManager:
         }
 
         self.conversation_history.append(exchange)
+        self._update_topics(user_input)
+        self._compress_history_if_needed()
 
-        # 히스토리 크기 제한
-        if len(self.conversation_history) > self.max_history:
-            self.conversation_history = self.conversation_history[-self.max_history:]
-
-        self.logger.debug(f"Added conversation exchange, total: {len(self.conversation_history)}")
+        self.logger.debug(
+            "Added conversation exchange | total=%d | long_summary_len=%d"
+            % (len(self.conversation_history), len(self.long_term_summary))
+        )
 
     async def get_context_for_request(self, current_input: str) -> Dict[str, Any]:
         """요청을 위한 컨텍스트 생성"""
+        recent_history = self._get_recent_exchanges()
+        prior_messages = self._build_prior_messages()
+
+        session_context = self.session_context.copy()
+        dominant_topics = self._top_topics()
+        if dominant_topics:
+            session_context["dominant_topics"] = dominant_topics
+
         context = {
-            'session_context': self.session_context.copy(),
+            'session_context': session_context,
             'user_preferences': self.user_preferences.copy(),
-            'recent_history': self.conversation_history[-5:] if self.conversation_history else [],
+            'recent_history': recent_history,
+            'prior_messages': prior_messages,
+            'long_term_summary': self.long_term_summary,
             'current_input': current_input,
-            'context_summary': await self._generate_context_summary()
+            'context_summary': await self._generate_context_summary(recent_history)
         }
 
         return context
 
-    async def _generate_context_summary(self) -> str:
+    async def _generate_context_summary(
+        self,
+        recent_history: Optional[List[Dict[str, Any]]] = None
+    ) -> str:
         """컨텍스트 요약 생성"""
-        if not self.conversation_history:
+        if not self.conversation_history and not self.long_term_summary:
             return "No previous conversation history."
 
-        recent_topics = []
-        for exchange in self.conversation_history[-3:]:
-            user_input = exchange['user_input']
-            # 간단한 주제 추출 (실제로는 더 정교한 NLP 필요)
-            words = user_input.split()[:10]  # 첫 10개 단어
-            topic = ' '.join(words)
-            recent_topics.append(topic)
+        summary_lines: List[str] = []
 
-        return f"Recent topics: {'; '.join(recent_topics)}"
+        if self.long_term_summary:
+            summary_lines.append(f"[장기 요약] {self.long_term_summary}")
+
+        history_source = recent_history or self._get_recent_exchanges(limit=4)
+
+        for exchange in history_source:
+            user_input = (exchange.get('user_input') or '').strip()
+            assistant_response = (exchange.get('assistant_response') or '').strip()
+
+            if user_input:
+                summary_lines.append(f"사용자: {user_input}")
+            if assistant_response:
+                summary_lines.append(f"PACA: {assistant_response}")
+
+        if not summary_lines:
+            return "No recent conversation details available."
+
+        joined = " | ".join(summary_lines)
+        return joined[: self.summary_max_chars]
 
     def update_user_preferences(self, preferences: Dict[str, Any]) -> None:
         """사용자 선호도 업데이트"""
+        if not preferences:
+            return
         self.user_preferences.update(preferences)
+        self.logger.debug(
+            "User preferences updated: %s"
+            % (",".join(sorted(preferences.keys())) or "(none)")
+        )
 
     def set_session_context(self, key: str, value: Any) -> None:
         """세션 컨텍스트 설정"""
@@ -254,6 +296,94 @@ class ContextManager:
     def clear_history(self) -> None:
         """히스토리 초기화"""
         self.conversation_history.clear()
+        self.long_term_summary = ""
+        self.topic_counter.clear()
+
+    # 내부 헬퍼 -------------------------------------------------------------
+
+    def _get_recent_exchanges(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        if not self.conversation_history:
+            return []
+        window = limit or self.summary_window
+        return self.conversation_history[-window:]
+
+    def _build_prior_messages(self) -> List[Dict[str, str]]:
+        if not self.conversation_history:
+            return []
+
+        cutoff = max(0, len(self.conversation_history) - self.summary_window)
+        prior: List[Dict[str, str]] = []
+
+        for exchange in self.conversation_history[:cutoff]:
+            user_input = (exchange.get('user_input') or '').strip()
+            assistant_response = (exchange.get('assistant_response') or '').strip()
+
+            if user_input:
+                prior.append({"role": "user", "content": user_input})
+            if assistant_response:
+                prior.append({"role": "assistant", "content": assistant_response})
+
+        return prior
+
+    def _compress_history_if_needed(self) -> None:
+        overflow = len(self.conversation_history) - self.max_history
+        if overflow <= 0:
+            return
+
+        archived = self.conversation_history[:overflow]
+        self._append_to_long_term_summary(archived)
+        self.conversation_history = self.conversation_history[overflow:]
+
+    def _append_to_long_term_summary(self, exchanges: List[Dict[str, Any]]) -> None:
+        if not exchanges:
+            return
+
+        summary_bits: List[str] = []
+        for exchange in exchanges:
+            user_input = (exchange.get('user_input') or '').strip()
+            assistant_response = (exchange.get('assistant_response') or '').strip()
+
+            if user_input:
+                summary_bits.append(f"Q:{user_input[:160]}")
+                self._update_topics(user_input)
+            if assistant_response:
+                summary_bits.append(f"A:{assistant_response[:160]}")
+
+        if not summary_bits:
+            return
+
+        snapshot = " | ".join(summary_bits)
+        if self.long_term_summary:
+            self.long_term_summary = f"{self.long_term_summary} || {snapshot}"
+        else:
+            self.long_term_summary = snapshot
+
+        if len(self.long_term_summary) > self.summary_max_chars:
+            self.long_term_summary = self.long_term_summary[-self.summary_max_chars:]
+
+    def _update_topics(self, text: str) -> None:
+        if not text:
+            return
+
+        tokens = [token.lower() for token in re.findall(r"[\w가-힣]{2,}", text)]
+        if not tokens:
+            return
+
+        stopwords = {
+            "그리고", "하지만", "그러나", "그래서", "위해", "대한", "관련", "사용", "가능",
+            "필요", "있는", "없는", "합니다", "하세요", "해주세요", "입니다", "정도",
+            "maybe", "really", "very", "have", "with", "that", "this", "when", "where",
+        }
+        filtered = [token for token in tokens if token not in stopwords]
+        if not filtered:
+            return
+
+        self.topic_counter.update(filtered[:10])
+
+    def _top_topics(self, limit: int = 5) -> List[str]:
+        if not self.topic_counter:
+            return []
+        return [word for word, _ in self.topic_counter.most_common(limit)]
 
 
 class TokenUsageMonitor:

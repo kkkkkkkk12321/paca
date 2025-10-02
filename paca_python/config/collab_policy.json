@@ -1,0 +1,26 @@
+{
+  "reasoning_confidence_threshold": 0.58,
+  "backtrack_confidence_threshold": 0.45,
+  "strategy_switch_confidence_threshold": 0.6,
+  "policy": {
+    "low_confidence_threshold": 0.5,
+    "high_risk_domains": ["finance", "medical"],
+    "escalate_on_failure": true
+  },
+  "escalation": {
+    "min_confidence": 0.55,
+    "notify_operator": true,
+    "max_attempts_before_escalation": 2
+  },
+  "collaboration": {
+    "enabled": true,
+    "default_channel": "event_bus",
+    "partners": ["metacognition_engine", "reasoning_engine"],
+    "handshake_timeout_seconds": 5.0
+  },
+  "llm": {
+    "max_retries": 2,
+    "retry_delay_seconds": 1.5,
+    "fallback_behaviour": "heuristic"
+  }
+}
