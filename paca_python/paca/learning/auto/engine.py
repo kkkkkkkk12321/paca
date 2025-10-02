@@ -8,6 +8,7 @@ import asyncio
 import json
 import time
 import logging
+from dataclasses import fields
 from typing import List, Dict, Any, Optional, Set, Tuple
 from pathlib import Path
 import re
@@ -705,20 +706,87 @@ class AutoLearningSystem:
     def _load_learning_data(self) -> None:
         """학습 데이터 로드"""
         try:
+            loaded_learning_points: List[LearningPoint] = []
+            loaded_tactics: List[GeneratedTactic] = []
+            loaded_heuristics: List[GeneratedHeuristic] = []
+            loaded_metrics = self.metrics
+
             # 학습 포인트 로드
             learning_points_file = self.storage_path / "learning_points.json"
             if learning_points_file.exists():
                 with open(learning_points_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    for item in data:
-                        if 'category' in item:
-                            item['category'] = LearningCategory(item['category'])
-                        # LearningPoint 객체 재생성 (간단한 버전)
-                        # 실제 구현에서는 더 정교한 역직렬화 필요
+                lp_fields = {field.name for field in fields(LearningPoint)}
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
 
-            # 전술/휴리스틱 로드도 유사하게 구현
+                    item_data = dict(item)
+                    if 'category' in item_data:
+                        try:
+                            item_data['category'] = LearningCategory(item_data['category'])
+                        except ValueError:
+                            logger.warning("Unknown learning category encountered during load: %s", item_data['category'])
+                            continue
 
-            # 오래된 데이터 정리
+                    filtered_item = {k: item_data.get(k) for k in lp_fields if k in item_data}
+                    try:
+                        loaded_learning_points.append(LearningPoint(**filtered_item))
+                    except (TypeError, ValueError) as e:
+                        logger.warning("Skipping invalid learning point entry: %s", e)
+
+            # 전술 로드
+            tactics_file = self.storage_path / "generated_tactics.json"
+            if tactics_file.exists():
+                with open(tactics_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                tactic_fields = {field.name for field in fields(GeneratedTactic)}
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+
+                    filtered_item = {k: item.get(k) for k in tactic_fields if k in item}
+                    try:
+                        loaded_tactics.append(GeneratedTactic(**filtered_item))
+                    except (TypeError, ValueError) as e:
+                        logger.warning("Skipping invalid generated tactic entry: %s", e)
+
+            # 휴리스틱 로드
+            heuristics_file = self.storage_path / "generated_heuristics.json"
+            if heuristics_file.exists():
+                with open(heuristics_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                heuristic_fields = {field.name for field in fields(GeneratedHeuristic)}
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+
+                    filtered_item = {k: item.get(k) for k in heuristic_fields if k in item}
+                    try:
+                        loaded_heuristics.append(GeneratedHeuristic(**filtered_item))
+                    except (TypeError, ValueError) as e:
+                        logger.warning("Skipping invalid generated heuristic entry: %s", e)
+
+            # 메트릭 로드
+            metrics_file = self.storage_path / "learning_metrics.json"
+            if metrics_file.exists():
+                with open(metrics_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                metrics_fields = {field.name for field in fields(LearningMetrics)}
+                filtered_metrics = {k: data.get(k) for k in metrics_fields if k in data}
+                try:
+                    loaded_metrics = LearningMetrics(**filtered_metrics)
+                except (TypeError, ValueError) as e:
+                    logger.warning("Failed to load learning metrics, using defaults: %s", e)
+                    loaded_metrics = LearningMetrics()
+
+            # 상태 반영
+            self.learning_points = loaded_learning_points
+            self.generated_tactics = loaded_tactics
+            self.generated_heuristics = loaded_heuristics
+            self.metrics = loaded_metrics
+
+            # 오래된 데이터 정리 (상태 복원 후 실행)
             self._cleanup_old_learning_data()
 
         except Exception as e:
