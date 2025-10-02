@@ -156,6 +156,7 @@ async def test_concurrent_saves_capture_mutations(tmp_path: Path):
 
 
 def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
+
     system = AutoLearningSystem(
         database=_StubDatabase(),
         conversation_memory=_StubConversationMemory(),
@@ -175,3 +176,4 @@ def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
         "learning_metrics.json",
     ):
         assert (tmp_path / artifact).exists(), f"{artifact} should be persisted without an active loop at init"
+
