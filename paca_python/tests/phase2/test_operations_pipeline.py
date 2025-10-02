@@ -131,3 +131,30 @@ def test_ops_monitoring_bridge_survives_multiple_asyncio_run_calls(tmp_path: Pat
     payload = json.loads((tmp_path / "ops.json").read_text(encoding="utf-8"))
     assert payload["components"]["phase_regression"]["status"] == "passed"
 
+
+def test_operations_pipeline_survives_multiple_asyncio_run_calls(tmp_path: Path):
+    regression_results = [
+        RegressionRunResult(
+            module="tests/test_a.py",
+            status="passed",
+            duration_s=0.1,
+            return_code=0,
+        )
+    ]
+
+    monitoring_path = tmp_path / "ops.json"
+    pipeline = OperationsPipeline(
+        regression_runner=_StubRegressionRunner(regression_results),
+        gui_runner=_StubGUIRunner(
+            GUIRegressionResult(status="passed", duration_s=0.05, detail="")
+        ),
+        monitoring_bridge=OpsMonitoringBridge(export_path=monitoring_path),
+    )
+
+    for _ in range(2):
+        result = asyncio.run(pipeline.run())
+        assert result.success
+
+    payload = json.loads(monitoring_path.read_text(encoding="utf-8"))
+    assert payload["components"]["gui_regression"]["status"] == "passed"
+

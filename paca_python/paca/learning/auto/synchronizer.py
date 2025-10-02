@@ -62,22 +62,26 @@ class FileLearningDataSynchronizer:
 
         lock = self._lock
         lock_loop = self._lock_loop
-        if lock is not None and lock_loop is current_loop:
-            if not lock_loop.is_closed():
-                return lock
 
-        with self._lock_guard:
-            lock = self._lock
-            lock_loop = self._lock_loop
-            if (
-                lock is None
-                or lock_loop is None
-                or lock_loop.is_closed()
-                or lock_loop is not current_loop
-            ):
-                lock = asyncio.Lock()
-                self._lock = lock
-                self._lock_loop = current_loop
+        if (
+            lock is None
+            or lock_loop is None
+            or lock_loop.is_closed()
+            or lock_loop is not current_loop
+        ):
+            with self._lock_guard:
+                lock = self._lock
+                lock_loop = self._lock_loop
+                if (
+                    lock is None
+                    or lock_loop is None
+                    or lock_loop.is_closed()
+                    or lock_loop is not current_loop
+                ):
+                    lock = asyncio.Lock()
+                    self._lock = lock
+                    self._lock_loop = current_loop
+
         return lock
 
 
