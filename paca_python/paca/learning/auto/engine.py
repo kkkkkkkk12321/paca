@@ -26,6 +26,12 @@ from ...core.types import Result, create_success, create_failure
 from ...core.utils import generate_id, current_timestamp, safe_get
 from ...core.errors import ApplicationError as LearningError, ErrorSeverity
 from ...core.utils.portable_storage import get_storage_manager
+from .synchronizer import (
+    CompositeLearningDataSynchronizer,
+    LearningDataSnapshot,
+    LearningDataSynchronizer,
+    build_default_synchronizer,
+)
 from .types import (
     LearningPoint, LearningPattern, LearningStatus, GeneratedTactic,
     GeneratedHeuristic, GeneratedKnowledge, LearningCategory, PatternType,
@@ -53,7 +59,8 @@ class AutoLearningSystem:
         database: DatabaseInterface,
         conversation_memory: ConversationMemoryInterface,
         storage_path: Optional[str] = None,
-        enable_korean_nlp: bool = True
+        enable_korean_nlp: bool = True,
+        learning_synchronizer: Optional[LearningDataSynchronizer] = None,
     ):
         self.database = database
         self.conversation_memory = conversation_memory
@@ -84,8 +91,17 @@ class AutoLearningSystem:
         self.learning_patterns = self._initialize_korean_patterns()
 
         # 저장 동기화 락 (첫 비동기 저장 시점에 생성)
-
         self._save_lock: Optional[asyncio.Lock] = None
+
+        default_synchronizer = build_default_synchronizer(self.storage_path)
+        if learning_synchronizer is None:
+            self._learning_synchronizer: LearningDataSynchronizer = default_synchronizer
+        else:
+            self._learning_synchronizer = CompositeLearningDataSynchronizer(
+                default_synchronizer,
+                learning_synchronizer,
+            )
+
 
         # 데이터 로드
         self._load_learning_data()
@@ -695,8 +711,19 @@ class AutoLearningSystem:
                     (metrics_file, metrics_data),
                 ]
 
+                snapshot = LearningDataSnapshot(
+                    saved_at=time.time(),
+                    learning_points=learning_points_data,
+                    generated_tactics=tactics_data,
+                    generated_heuristics=heuristics_data,
+                    metrics=metrics_data,
+                )
+
                 for path, data in artifacts:
                     await self._write_json_artifact(path, data)
+
+                await self._sync_learning_snapshot(snapshot)
+
 
             except Exception as e:
                 logger.error(f"Failed to save learning data: {str(e)}")
@@ -704,6 +731,12 @@ class AutoLearningSystem:
     async def _write_json_artifact(self, path: Path, data: Any) -> None:
         """비동기적으로 JSON 아티팩트를 저장"""
         await asyncio.to_thread(self._write_json_file, path, data)
+
+    async def _sync_learning_snapshot(self, snapshot: LearningDataSnapshot) -> None:
+        try:
+            await self._learning_synchronizer.sync(snapshot)
+        except Exception as exc:  # pragma: no cover - best effort sync failures should not break saves
+            logger.warning("Learning snapshot synchronization failed: %s", exc)
 
     @staticmethod
     def _write_json_file(path: Path, data: Any) -> None:

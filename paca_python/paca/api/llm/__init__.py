@@ -1,7 +1,4 @@
-"""
-LLM API Module
-LLM 클라이언트와 관련된 모든 컴포넌트들
-"""
+"""LLM API Module exposing client and ensemble helpers."""
 
 from .base import (
     LLMInterface,
@@ -10,29 +7,40 @@ from .base import (
     LLMError,
     LLMConfig,
     ModelType,
-    GenerationConfig
+    GenerationConfig,
 )
 
 from .gemini_client import (
     GeminiClientManager,
     GeminiResponse,
     GeminiConfig,
-    create_gemini_client
+    create_gemini_client,
+)
+
+from .ensemble import (
+    LLMEnsembleCandidate,
+    EnsembleStrategyResult,
+    merge_candidates,
 )
 
 __all__ = [
     # Base interfaces
-    'LLMInterface',
-    'LLMResponse',
-    'LLMRequest',
-    'LLMError',
-    'LLMConfig',
-    'ModelType',
-    'GenerationConfig',
+    "LLMInterface",
+    "LLMResponse",
+    "LLMRequest",
+    "LLMError",
+    "LLMConfig",
+    "ModelType",
+    "GenerationConfig",
 
     # Gemini client
-    'GeminiClientManager',
-    'GeminiResponse',
-    'GeminiConfig',
-    'create_gemini_client'
+    "GeminiClientManager",
+    "GeminiResponse",
+    "GeminiConfig",
+    "create_gemini_client",
+
+    # Ensemble utilities
+    "LLMEnsembleCandidate",
+    "EnsembleStrategyResult",
+    "merge_candidates",
 ]

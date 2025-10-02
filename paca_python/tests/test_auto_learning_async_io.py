@@ -12,7 +12,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from paca.learning.auto.engine import AutoLearningSystem
-from paca.learning.auto.types import GeneratedTactic, GeneratedHeuristic
+from paca.learning.auto.types import (
+    GeneratedTactic,
+    GeneratedHeuristic,
+    LearningCategory,
+    LearningPoint,
+)
+
 
 
 class _StubDatabase:
@@ -176,4 +182,46 @@ def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
         "learning_metrics.json",
     ):
         assert (tmp_path / artifact).exists(), f"{artifact} should be persisted without an active loop at init"
+
+
+class _RecordingSynchronizer:
+    def __init__(self) -> None:
+        self.snapshots = []
+
+    async def sync(self, snapshot) -> None:
+        self.snapshots.append(snapshot)
+
+
+@pytest.mark.asyncio
+async def test_learning_snapshot_synchronizer_receives_data(tmp_path: Path):
+    synchronizer = _RecordingSynchronizer()
+    system = AutoLearningSystem(
+        database=_StubDatabase(),
+        conversation_memory=_StubConversationMemory(),
+        storage_path=str(tmp_path),
+        enable_korean_nlp=False,
+        learning_synchronizer=synchronizer,
+    )
+
+    system.learning_points.append(
+        LearningPoint(
+            user_message="성공했어",
+            paca_response="도움을 드릴 수 있어 기쁩니다.",
+            context="테스트",
+            category=LearningCategory.SUCCESS_PATTERN,
+            confidence=0.9,
+            extracted_knowledge="테스트 시나리오 학습",
+        )
+    )
+
+    await system._save_learning_data()
+
+    assert synchronizer.snapshots, "custom synchronizer should receive a snapshot"
+    snapshot = synchronizer.snapshots[-1]
+    assert snapshot.learning_points, "snapshot should include learning points"
+
+    monitoring_snapshot = tmp_path / "monitoring" / "learning_snapshot.json"
+    assert monitoring_snapshot.exists()
+    exported = json.loads(monitoring_snapshot.read_text(encoding="utf-8"))
+    assert exported["learning_points"], "default synchronizer should persist data for monitoring"
 
