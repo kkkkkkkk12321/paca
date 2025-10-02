@@ -38,6 +38,7 @@ class FileLearningDataSynchronizer:
     def __init__(self, export_path: Path) -> None:
         self.export_path = export_path
         self._lock: Optional[asyncio.Lock] = None
+        self._lock_loop: Optional[asyncio.AbstractEventLoop] = None
         self._lock_guard = threading.Lock()
 
     async def sync(self, snapshot: LearningDataSnapshot) -> None:
@@ -57,15 +58,25 @@ class FileLearningDataSynchronizer:
         self.export_path.write_text(serialized, encoding="utf-8")
 
     def _ensure_lock(self) -> asyncio.Lock:
+        current_loop = asyncio.get_running_loop()
+
         lock = self._lock
-        if lock is not None:
+        lock_loop = self._lock_loop
+        if lock is not None and lock_loop is current_loop and not current_loop.is_closed():
             return lock
 
         with self._lock_guard:
             lock = self._lock
-            if lock is None:
+            lock_loop = self._lock_loop
+            if (
+                lock is None
+                or lock_loop is None
+                or lock_loop.is_closed()
+                or lock_loop is not current_loop
+            ):
                 lock = asyncio.Lock()
                 self._lock = lock
+                self._lock_loop = current_loop
         return lock
 
 

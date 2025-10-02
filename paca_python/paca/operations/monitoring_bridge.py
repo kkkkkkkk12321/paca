@@ -26,6 +26,7 @@ class OpsMonitoringBridge:
         self.export_path = export_path or Path("logs/ops/ops_pipeline_state.json")
         self.logger = logger or logging.getLogger("paca.operations.pipeline")
         self._write_lock: Optional[asyncio.Lock] = None
+        self._write_lock_loop: Optional[asyncio.AbstractEventLoop] = None
         self._lock_guard = threading.Lock()
 
     async def publish(self, result: "PipelineResult") -> None:
@@ -58,15 +59,25 @@ class OpsMonitoringBridge:
         path.write_text(serialized, encoding="utf-8")
 
     def _ensure_write_lock(self) -> asyncio.Lock:
+        current_loop = asyncio.get_running_loop()
+
         lock = self._write_lock
-        if lock is not None:
+        lock_loop = self._write_lock_loop
+        if lock is not None and lock_loop is current_loop and not current_loop.is_closed():
             return lock
 
         with self._lock_guard:
             lock = self._write_lock
-            if lock is None:
+            lock_loop = self._write_lock_loop
+            if (
+                lock is None
+                or lock_loop is None
+                or lock_loop.is_closed()
+                or lock_loop is not current_loop
+            ):
                 lock = asyncio.Lock()
                 self._write_lock = lock
+                self._write_lock_loop = current_loop
         return lock
 
 

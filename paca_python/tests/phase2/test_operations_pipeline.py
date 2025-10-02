@@ -110,3 +110,24 @@ def test_ops_monitoring_bridge_initializes_without_event_loop(tmp_path: Path):
 
     assert (tmp_path / "ops.json").exists(), "monitoring payload should persist in synchronous context"
 
+
+def test_ops_monitoring_bridge_survives_multiple_asyncio_run_calls(tmp_path: Path):
+    bridge = OpsMonitoringBridge(export_path=tmp_path / "ops.json")
+    result = PipelineResult(
+        started_at=datetime.utcnow(),
+        finished_at=datetime.utcnow(),
+        components=[
+            PipelineComponentResult(
+                name="phase_regression",
+                status="passed",
+                duration_s=0.1,
+            )
+        ],
+    )
+
+    for _ in range(2):
+        asyncio.run(bridge.publish(result))
+
+    payload = json.loads((tmp_path / "ops.json").read_text(encoding="utf-8"))
+    assert payload["components"]["phase_regression"]["status"] == "passed"
+
