@@ -8,6 +8,7 @@ PACA v5 Python의 핵심 차별화 기능
 
 import asyncio
 import copy
+import inspect
 import json
 import logging
 import time
@@ -15,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Union, Callable, Tuple, Set
 
 # PACA 모듈 임포트
@@ -245,6 +247,7 @@ class ReasoningChain:
         self.success_rate = 0.0
 
         self._escalation_reasons: List[str] = []
+        self._collaboration_attempts: List[Dict[str, Any]] = []
 
         logger.info("ReasoningChain 초기화 완료")
 
@@ -255,6 +258,345 @@ class ReasoningChain:
         self.backtrack_successes = 0
         self.backtrack_failures = 0
         self._latest_alternative_paths = []
+        self._collaboration_attempts = []
+
+    def _build_collaboration_rule(self, rule: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        rule = rule or {}
+        reasoning_types: List[str] = []
+        for value in rule.get('reasoning_types', []) or []:
+            if isinstance(value, ReasoningType):
+                reasoning_types.append(value.value)
+            elif isinstance(value, str):
+                reasoning_types.append(value.lower())
+
+        if not reasoning_types:
+            reasoning_types.append(self.escalation_reasoning_type.value)
+
+        # 순서를 유지한 채 중복 제거
+        unique_reasoning_types = list(dict.fromkeys(reasoning_types))
+
+        try:
+            max_attempts = int(rule.get('max_attempts', 1))
+        except (TypeError, ValueError):
+            max_attempts = 1
+
+        if max_attempts < 1:
+            max_attempts = 1
+
+        return {
+            'reasoning_types': tuple(unique_reasoning_types),
+            'max_attempts': max_attempts,
+        }
+
+    def _parse_collaboration_policy(self, raw_policy: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        if not isinstance(raw_policy, dict):
+            raw_policy = {}
+
+        parsed: Dict[str, Dict[str, Any]] = {}
+        parsed['__default__'] = self._build_collaboration_rule(raw_policy.get('default'))
+
+        for reason_key, rule in raw_policy.items():
+            if reason_key == 'default':
+                continue
+            parsed[reason_key] = self._build_collaboration_rule(rule)
+
+        return parsed
+
+    def _resolve_collaboration_rule(self, reason_key: Optional[str]) -> Dict[str, Any]:
+        policy = self.escalation_collaboration_policy or {}
+        if reason_key and reason_key in policy:
+            return policy[reason_key]
+        return policy.get('__default__', self._build_collaboration_rule(None))
+
+    async def _ensure_reasoning_engine_ready(self) -> bool:
+        if not self.reasoning_engine:
+            try:
+                self.reasoning_engine = ReasoningEngine()
+            except Exception as exc:
+                logger.warning("ReasoningEngine 초기화 실패: %s", exc)
+                return False
+
+        initialize = getattr(self.reasoning_engine, 'initialize', None)
+        if not callable(initialize):
+            return True
+
+        try:
+            init_result = await initialize()
+        except Exception as exc:
+            logger.warning("ReasoningEngine 초기화 중 예외: %s", exc)
+            return False
+
+        if hasattr(init_result, 'is_failure') and init_result.is_failure:
+            logger.warning("ReasoningEngine 초기화 실패: %s", getattr(init_result, 'error', None))
+            return False
+
+        return True
+
+    def _record_collaboration_attempts(
+        self,
+        attempts: List[Dict[str, Any]],
+        raw_attempts: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        if not attempts:
+            return
+
+        self._collaboration_attempts.extend(copy.deepcopy(attempts))
+        payload = raw_attempts if raw_attempts is not None else attempts
+
+        try:
+            logger.info("collaboration_attempts", extra={"attempts": payload})
+        except Exception:
+            logger.info("collaboration_attempts: %s", payload)
+
+    async def _attempt_reasoning_type(
+        self,
+        reasoning_type: str,
+        premises: List[Any],
+        target_conclusion: Optional[Any],
+        meta: Dict[str, Any],
+    ) -> Tuple[bool, Dict[str, Any]]:
+        engine = self.reasoning_engine
+        if not engine:
+            return False, {'status': 'engine_unavailable'}
+
+        resolved_type: Any = reasoning_type
+        if isinstance(resolved_type, str):
+            resolved_type = self._resolve_reasoning_type(resolved_type)
+        reasoning_label = resolved_type.value if isinstance(resolved_type, ReasoningType) else str(resolved_type)
+
+        outcome: Any = None
+        reason_method = getattr(engine, 'reason', None)
+        if callable(reason_method):
+            try:
+                outcome = await reason_method(
+                    resolved_type,
+                    premises=premises or [meta.get('problem')],
+                    target_conclusion=target_conclusion,
+                    confidence_threshold=self.escalation_min_confidence,
+                    max_steps=10,
+                )
+            except TypeError:
+                try:
+                    outcome = await reason_method(
+                        resolved_type,
+                        premises or [meta.get('problem')],
+                        target_conclusion,
+                    )
+                except TypeError:
+                    try:
+                        outcome = await reason_method(resolved_type, premises or [meta.get('problem')])
+                    except Exception:
+                        outcome = None
+            except Exception as exc:
+                return False, {'status': 'error', 'error': str(exc)}
+
+        if outcome is None:
+            run_method = getattr(engine, 'run', None)
+            if not callable(run_method):
+                return False, {'status': 'engine_unavailable'}
+
+            async def _maybe_await(value: Any) -> Any:
+                return await value if inspect.isawaitable(value) else value
+
+            try:
+                try:
+                    outcome = await _maybe_await(run_method(reasoning_label))
+                except TypeError:
+                    try:
+                        outcome = await _maybe_await(run_method(reasoning_label, premises or [meta.get('problem')]))
+                    except TypeError:
+                        try:
+                            outcome = await _maybe_await(
+                                run_method(
+                                    reasoning_label,
+                                    premises or [meta.get('problem')],
+                                    target_conclusion,
+                                )
+                            )
+                        except TypeError:
+                            outcome = await _maybe_await(run_method(reasoning_label, meta))
+            except Exception as exc:
+                return False, {'status': 'error', 'error': str(exc)}
+
+            if outcome is None:
+                return False, {'status': 'no_effect'}
+
+            return True, {'status': 'ok', 'result': outcome}
+
+        if getattr(outcome, 'is_success', False):
+            return True, {'status': 'ok', 'result': getattr(outcome, 'value', None)}
+
+        if getattr(outcome, 'success', False):
+            return True, {'status': 'ok', 'result': outcome}
+
+        return False, {
+            'status': 'no_effect',
+            'error': getattr(outcome, 'error', None)
+        }
+
+    async def _try_collaboration_retries(
+        self,
+        reason_key: Optional[str],
+        context: Optional[Dict[str, Any]],
+        *,
+        final_result: Optional[Any] = None,
+        attempt_history: Optional[List[Dict[str, Any]]] = None,
+        problem: Optional[str] = None,
+    ) -> Optional[Any]:
+        if not self.enable_reasoning_engine_escalation:
+            return final_result
+
+        rule = self._resolve_collaboration_rule(reason_key)
+        reasoning_types: Tuple[str, ...] = tuple(rule.get('reasoning_types', ()))
+        max_attempts: int = int(rule.get('max_attempts', 0) or 0)
+
+        if not reasoning_types or max_attempts <= 0:
+            return final_result
+
+        if final_result is None:
+            final_result = SimpleNamespace(
+                problem=problem or (context or {}).get('problem'),
+                steps=[],
+                final_conclusion=None,
+                confidence_score=0.0,
+                quality_assessment={'unresolved_validation': True},
+            )
+
+        ready = await self._ensure_reasoning_engine_ready()
+        target_problem = problem or getattr(final_result, 'problem', None)
+
+        premises: List[Any] = []
+        for step in getattr(final_result, 'steps', []) or []:
+            output = getattr(step, 'output_data', None)
+            if output:
+                premises.append(output)
+        if not premises and context:
+            premises.append(context)
+
+        raw_attempts: List[Dict[str, Any]] = []
+        recorded_attempts: List[Dict[str, Any]] = []
+
+        def _next_attempt_number() -> int:
+            return len(self._collaboration_attempts) + len(recorded_attempts) + 1
+
+        if not ready:
+            for attempt_index in range(1, max_attempts + 1):
+                reasoning_type = reasoning_types[(attempt_index - 1) % len(reasoning_types)]
+                meta = {
+                    'attempt': attempt_index,
+                    'reason': reason_key,
+                    'collab_reason': reason_key or 'default',
+                    'reasoning_type': reasoning_type,
+                    'status': 'engine_unavailable',
+                }
+                raw_attempts.append(meta)
+                recorded_attempts.append({
+                    'attempt': _next_attempt_number(),
+                    'strategy': 'reasoning_engine_collab',
+                    'reasoning_type': reasoning_type,
+                    'backtrack_attempts': 0,
+                    'backtrack_successes': 0,
+                    'backtrack_failures': 0,
+                    'confidence': getattr(final_result, 'confidence_score', None),
+                    'unresolved_validation': True,
+                    'status': 'engine_unavailable',
+                    'alternative_solutions': [],
+                    'error': 'initialization_failed',
+                })
+
+            self._record_collaboration_attempts(recorded_attempts, raw_attempts)
+            if attempt_history is not None:
+                attempt_history.extend(copy.deepcopy(recorded_attempts))
+            return final_result
+
+        success = False
+
+        for attempt_index in range(1, max_attempts + 1):
+            reasoning_type = reasoning_types[(attempt_index - 1) % len(reasoning_types)]
+            meta = {
+                'attempt': attempt_index,
+                'reason': reason_key,
+                'collab_reason': reason_key or 'default',
+                'reasoning_type': reasoning_type,
+                'problem': target_problem,
+            }
+
+            attempt_success, detail = await self._attempt_reasoning_type(
+                reasoning_type,
+                premises,
+                getattr(final_result, 'final_conclusion', None),
+                meta,
+            )
+
+            raw_attempts.append({**meta, **detail})
+
+            history_entry = {
+                'attempt': _next_attempt_number(),
+                'strategy': 'reasoning_engine_collab',
+                'reasoning_type': reasoning_type,
+                'backtrack_attempts': 0,
+                'backtrack_successes': 0,
+                'backtrack_failures': 0,
+                'confidence': getattr(final_result, 'confidence_score', None),
+                'unresolved_validation': True,
+                'status': 'collaboration_failed',
+                'alternative_solutions': [],
+                'reason': reason_key,
+            }
+
+            if attempt_success:
+                success = True
+                reasoning_result = detail.get('result')
+                conclusion = getattr(reasoning_result, 'conclusion', None)
+                confidence = getattr(reasoning_result, 'confidence', None)
+                execution_time = getattr(reasoning_result, 'execution_time_ms', None)
+                steps = getattr(reasoning_result, 'reasoning_steps', None)
+
+                if conclusion:
+                    final_result.final_conclusion = conclusion
+                if isinstance(confidence, (int, float)):
+                    final_result.confidence_score = max(
+                        getattr(final_result, 'confidence_score', 0.0),
+                        float(confidence)
+                    )
+
+                quality = getattr(final_result, 'quality_assessment', {}) or {}
+                quality['unresolved_validation'] = False
+                quality['reasoning_engine_collab'] = {
+                    'conclusion': conclusion,
+                    'confidence': confidence,
+                    'type': reasoning_type,
+                    'execution_time_ms': execution_time,
+                    'steps': len(steps) if steps is not None else None,
+                    'via': 'collaboration_policy',
+                }
+                final_result.quality_assessment = quality
+
+                history_entry.update({
+                    'status': 'collaboration_success',
+                    'confidence': final_result.confidence_score,
+                    'unresolved_validation': False,
+                    'collaboration_details': quality['reasoning_engine_collab'],
+                })
+                recorded_attempts.append(history_entry)
+                break
+
+            else:
+                history_entry.update({
+                    'status': 'collaboration_failed',
+                    'error': detail.get('error'),
+                })
+                recorded_attempts.append(history_entry)
+
+        self._record_collaboration_attempts(recorded_attempts, raw_attempts)
+
+        if attempt_history is not None and recorded_attempts:
+            attempt_history.extend(copy.deepcopy(recorded_attempts))
+
+        if success:
+            return final_result
+
+        return final_result
 
     def _summarize_backtracking(self) -> List[Dict[str, Any]]:
         """백트래킹 이력 요약"""
@@ -398,12 +740,13 @@ class ReasoningChain:
             if self._escalation_reasons:
                 should_escalate = True
 
-            if self.enable_reasoning_engine_escalation and should_escalate:
-                if (
+            if self.enable_reasoning_engine_escalation:
+                should_escalate = should_escalate or (
                     len(attempt_history) >= self.escalation_after_attempts or
-                    final_result.confidence_score < self.escalation_min_confidence or
-                    self._escalation_reasons
-                ):
+                    final_result.confidence_score < self.escalation_min_confidence
+                )
+
+                if should_escalate:
                     final_result = await self._escalate_with_reasoning_engine(
                         chain_id,
                         problem,
@@ -778,6 +1121,13 @@ class ReasoningChain:
                 'backtrack_failures': self.backtrack_failures,
                 'domain': domain_key
             })
+            if self._collaboration_attempts:
+                quality_assessment['collaboration_attempts'] = copy.deepcopy(self._collaboration_attempts)
+                for entry in reversed(self._collaboration_attempts):
+                    details = entry.get('collaboration_details') if isinstance(entry, dict) else None
+                    if details:
+                        quality_assessment['reasoning_engine_collab'] = copy.deepcopy(details)
+                        break
 
             await self._end_metacognition_monitoring()
 
@@ -1766,17 +2116,60 @@ class ReasoningChain:
         )
         backtrack_validation_step.metadata['backtrack'] = True
 
-        if not new_validation_result.get('logic_validation', True):
+        unresolved_after_backtrack = not new_validation_result.get('logic_validation', True)
+        if unresolved_after_backtrack:
             backtrack_validation_step.errors.append('백트래킹 후에도 검증 실패')
+
+        steps.append(backtrack_validation_step)
+
+        collaboration_success = False
+        if unresolved_after_backtrack and self.enable_reasoning_engine_escalation:
+            reason_key = validation_result.get('failure_reason') or validation_result.get('reason')
+            collab_snapshot = SimpleNamespace(
+                problem=problem,
+                steps=list(steps),
+                final_conclusion=getattr(backtrack_validation_step, 'output_data', {}).get('validation_result'),
+                confidence_score=backtrack_validation_step.confidence,
+                quality_assessment={'unresolved_validation': True},
+            )
+            updated_result = await self._try_collaboration_retries(
+                reason_key,
+                analysis,
+                final_result=collab_snapshot,
+                problem=problem,
+            )
+
+            if updated_result and not updated_result.quality_assessment.get('unresolved_validation', True):
+                collaboration_success = True
+                unresolved_after_backtrack = False
+                new_validation_result['logic_validation'] = True
+                new_validation_result['issues'] = []
+                backtrack_validation_step.errors.clear()
+                backtrack_validation_step.warnings = [
+                    warning for warning in backtrack_validation_step.warnings
+                    if warning != '백트래킹 후에도 검증 실패'
+                ]
+                backtrack_validation_step.confidence = max(
+                    backtrack_validation_step.confidence,
+                    getattr(updated_result, 'confidence_score', backtrack_validation_step.confidence)
+                )
+                backtrack_validation_step.metadata['validation_summary'] = new_validation_result
+                backtrack_validation_step.metadata.setdefault('collaboration', {}).update(
+                    updated_result.quality_assessment.get('reasoning_engine_collab', {})
+                )
+
+        if unresolved_after_backtrack:
             self.backtrack_failures += 1
         else:
             self.backtrack_successes += 1
 
-        steps.append(backtrack_validation_step)
-
         analysis['revisions'][-1]['status'] = (
-            'recovered' if new_validation_result.get('logic_validation', True) else 'warning'
+            'collaboration_recovered' if collaboration_success
+            else 'recovered' if not unresolved_after_backtrack
+            else 'warning'
         )
+        if self._collaboration_attempts:
+            analysis['revisions'][-1]['collaboration_attempts'] = copy.deepcopy(self._collaboration_attempts)
 
         logger.info(
             "백트래킹 실행 완료: attempts=%s, 성공=%s, 실패=%s",
@@ -2165,222 +2558,3 @@ __all__ = [
     'create_reasoning_chain'
 ]
 
-
-# === Collaboration policy extension injected (non-invasive) ===
-# This block adds collaboration-policy-based retries without editing the original class body.
-# It defines helper functions and monkey-patches ReasoningChain to use them.
-from typing import Any as _Any, Dict as _Dict, List as _List, Optional as _Optional, Tuple as _Tuple
-
-# --- helpers for mapping strings to ReasoningType ---
-def _rc__resolve_reasoning_type(value: str):
-    try:
-        return ReasoningType(value)
-    except Exception:
-        try:
-            return ReasoningType[value.upper()]
-        except Exception:
-            return ReasoningType.DEDUCTIVE
-
-# --- parse/resolve collaboration policy ---
-def _rc__normalize_rule(self, rule: _Dict) -> _Tuple[_Tuple[str, ...], int]:
-    rts = tuple((rule or {}).get("reasoning_types", []) or [])
-    ma = int((rule or {}).get("max_attempts", 1) or 1)
-    if ma < 1: ma = 1
-    return rts, ma
-
-def _rc__parse_collaboration_policy(self, raw: _Dict) -> _Dict[str, _Dict]:
-    parsed: _Dict[str, _Dict] = {}
-    default_rts, default_ma = _rc__normalize_rule(self, raw.get("default", {"reasoning_types": ["deductive"], "max_attempts": 1}))
-    parsed["__default__"] = {"reasoning_types": default_rts, "max_attempts": default_ma}
-    for k, v in (raw or {}).items():
-        if k == "default":
-            continue
-        rts, ma = _rc__normalize_rule(self, v)
-        parsed[k] = {"reasoning_types": rts, "max_attempts": ma}
-    return parsed
-
-def _rc__resolve_collab_rule(self, reason_key: _Optional[str]) -> _Dict:
-    if not hasattr(self, "escalation_collaboration_policy") or not self.escalation_collaboration_policy:
-        self.escalation_collaboration_policy = _rc__parse_collaboration_policy(self, {})
-    if not reason_key:
-        return self.escalation_collaboration_policy.get("__default__", {"reasoning_types": ("deductive",), "max_attempts": 1})
-    return self.escalation_collaboration_policy.get(reason_key,
-           self.escalation_collaboration_policy.get("__default__", {"reasoning_types": ("deductive",), "max_attempts": 1}))
-
-# --- attempt reasoning via external ReasoningEngine according to policy ---
-async def _rc__attempt_reasoning_type(self, reasoning_type: str, premises: _List[_Any], target_conclusion: _Optional[str], meta: _Dict):
-    if not getattr(self, "reasoning_engine", None):
-        return None
-    try:
-        # Ensure initialized similar to _escalate_with_reasoning_engine
-        try:
-            init_result = await self.reasoning_engine.initialize()
-            if getattr(init_result, "is_failure", False):
-                return None
-        except Exception:
-            # proceed best-effort
-            pass
-
-        rt = _rc__resolve_reasoning_type(reasoning_type)
-        outcome = await self.reasoning_engine.reason(
-            rt,
-            premises=premises if premises else [meta.get("problem")],
-            target_conclusion=target_conclusion,
-            confidence_threshold=getattr(self, "escalation_min_confidence", 0.8),
-            max_steps=10
-        )
-        return outcome
-    except Exception:
-        return None
-
-async def _rc__try_collaboration_retries(self, reason_key: _Optional[str], final_result, attempt_history: _List[_Dict], context: _Optional[_Dict] = None):
-    rule = _rc__resolve_collab_rule(self, reason_key)
-    attempts_log: _List[_Dict] = []
-    premises: _List[_Any] = []
-    for step in getattr(final_result, "steps", []) or []:
-        if getattr(step, "output_data", None):
-            premises.append(step.output_data)
-    target_conclusion = getattr(final_result, "final_conclusion", None)
-
-    for rtype in rule["reasoning_types"]:
-        for attempt_idx in range(1, int(rule["max_attempts"]) + 1):
-            meta = {
-                "collab_reason": reason_key or "default",
-                "reasoning_type": rtype,
-                "attempt": attempt_idx,
-                "problem": getattr(final_result, "problem", None)
-            }
-            outcome = await _rc__attempt_reasoning_type(self, rtype, premises, target_conclusion, meta)
-            if outcome is None:
-                attempts_log.append({**meta, "status": "engine_unavailable"})
-                continue
-            if getattr(outcome, "is_success", False):
-                val = getattr(outcome, "value", None)
-                # Update final_result
-                try:
-                    if val is not None:
-                        concl = getattr(val, "conclusion", None)
-                        conf = getattr(val, "confidence", None)
-                        exec_ms = getattr(val, "execution_time_ms", None)
-                        steps_cnt = len(getattr(val, "reasoning_steps", []) or [])
-                        if concl:
-                            final_result.final_conclusion = concl
-                        if isinstance(conf, (int, float)):
-                            final_result.confidence_score = max(final_result.confidence_score, float(conf))
-                        qa = getattr(final_result, "quality_assessment", {})
-                        qa["unresolved_validation"] = False
-                        qa["reasoning_engine_collab"] = {
-                            "conclusion": concl,
-                            "confidence": conf,
-                            "type": rtype,
-                            "execution_time_ms": exec_ms,
-                            "steps": steps_cnt,
-                            "via": "collaboration_policy"
-                        }
-                        final_result.quality_assessment = qa
-                except Exception:
-                    pass
-
-                attempts_log.append({**meta, "status": "ok"})
-                # reflect attempt in history
-                attempt_history.append({
-                    'attempt': len(attempt_history) + 1,
-                    'strategy': 'reasoning_engine_collab',
-                    'reasoning_type': rtype,
-                    'backtrack_attempts': 0,
-                    'backtrack_successes': 0,
-                    'backtrack_failures': 0,
-                    'confidence': getattr(final_result, "confidence_score", None),
-                    'unresolved_validation': False,
-                    'status': 'collaboration_success',
-                    'alternative_solutions': []
-                })
-                _rc__record_collab_attempts(self, attempts_log)
-                return final_result
-            else:
-                attempts_log.append({**meta, "status": "no_effect", "error": getattr(outcome, "error", None)})
-                attempt_history.append({
-                    'attempt': len(attempt_history) + 1,
-                    'strategy': 'reasoning_engine_collab',
-                    'reasoning_type': rtype,
-                    'backtrack_attempts': 0,
-                    'backtrack_successes': 0,
-                    'backtrack_failures': 0,
-                    'confidence': getattr(final_result, "confidence_score", None),
-                    'unresolved_validation': True,
-                    'status': 'collaboration_failed',
-                    'alternative_solutions': [],
-                    'error': getattr(outcome, "error", None)
-                })
-
-    _rc__record_collab_attempts(self, attempts_log)
-    return final_result
-
-def _rc__record_collab_attempts(self, attempts: _List[_Dict]):
-    try:
-        logger.info("collaboration_attempts", extra={"attempts": attempts})
-    except Exception:
-        pass
-
-# --- patch _execute_backtrack to trigger collaboration retries on failure ---
-# Save original
-if hasattr(ReasoningChain, "_execute_backtrack"):
-    ReasoningChain.__orig_execute_backtrack = ReasoningChain._execute_backtrack
-
-# Define patched wrapper
-async def _rc__execute_backtrack_patched(self, problem: str, analysis: _Dict, steps: _List, validation_result: _Dict, checkpoint):
-    # Call original backtrack implementation
-    result_steps = await ReasoningChain.__orig_execute_backtrack(self, problem, analysis, steps, validation_result, checkpoint)
-    try:
-        # Determine if still failing
-        reason_key = validation_result.get('failure_reason') or validation_result.get('reason') or None
-        still_failing = True
-        if result_steps and hasattr(result_steps[-1], "metadata"):
-            last_meta = getattr(result_steps[-1], "metadata", {}) or {}
-            vres = last_meta.get("validation_summary") or last_meta.get("validation_result") or {}
-            if isinstance(vres, dict):
-                # If logic_validation True, consider recovered
-                still_failing = not vres.get('logic_validation', True)
-        # If failing, and escalation is enabled, try collaboration
-        if still_failing and getattr(self, "enable_reasoning_engine_escalation", False):
-            # Build a minimal final_result-like object from current context to reuse _rc__try_collaboration_retries
-            final_result = type("FinalLike", (), {})()
-            final_result.problem = problem
-            final_result.steps = result_steps
-            # Try to get current conclusion/confidence; fallbacks
-            final_result.final_conclusion = "백트래킹 후 임시 결론"
-            final_result.confidence_score = 0.0
-            final_result.quality_assessment = {'unresolved_validation': True}
-            attempt_history = []
-            updated = await _rc__try_collaboration_retries(self, reason_key, final_result, attempt_history, context=analysis)
-            # If collaboration cleared unresolved_validation, append a synthetic validation step
-            if updated and not updated.quality_assessment.get('unresolved_validation', True):
-                # Mark recovery by adding a synthetic validation step summary
-                from types import SimpleNamespace
-                class _TmpStep:
-                    pass
-                # No change to steps list structure; we simply return as-is since higher layers read quality_assessment
-                pass
-    except Exception:
-        pass
-    return result_steps
-
-# Monkey-patch the method
-ReasoningChain._execute_backtrack = _rc__execute_backtrack_patched
-
-# Attach helpers to class for potential direct calls elsewhere
-ReasoningChain._parse_collaboration_policy = _rc__parse_collaboration_policy
-ReasoningChain._resolve_collab_rule = _rc__resolve_collab_rule
-ReasoningChain._try_collaboration_retries = _rc__try_collaboration_retries
-ReasoningChain._attempt_reasoning_type = _rc__attempt_reasoning_type
-ReasoningChain._record_collab_attempts = _rc__record_collab_attempts
-
-# Ensure escalation_collaboration_policy exists even if not set during __init__
-if not hasattr(ReasoningChain, "escalation_collaboration_policy"):
-    try:
-        ReasoningChain.escalation_collaboration_policy = {}
-    except Exception:
-        pass
-
-from ._collaboration_patch import enable_collab_patch as _paca_enable_collab_patch
-_paca_enable_collab_patch(ReasoningChain)

@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from paca.learning.auto.engine import AutoLearningSystem
+from paca.learning.auto.types import GeneratedTactic, GeneratedHeuristic
 
 
 class _StubDatabase:
@@ -94,3 +95,83 @@ async def test_analyze_learning_opportunities_writes_artifacts_without_blocking(
         assert artifact_path.exists(), f"{filename} should be created"
         content = json.loads(artifact_path.read_text(encoding="utf-8"))
         assert isinstance(content, expected_type), f"{filename} should contain {expected_type.__name__}"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_saves_capture_mutations(tmp_path: Path):
+    system = AutoLearningSystem(
+        database=_StubDatabase(),
+        conversation_memory=_StubConversationMemory(),
+        storage_path=str(tmp_path),
+        enable_korean_nlp=False,
+    )
+
+    tactic = GeneratedTactic(name="existing tactic", description="desc", context="ctx")
+    heuristic = GeneratedHeuristic(pattern="pattern", avoidance_rule="avoid", context="ctx")
+    system.generated_tactics.append(tactic)
+    system.generated_heuristics.append(heuristic)
+
+    original_write = system._write_json_file
+    write_started = threading.Event()
+
+    def slow_write(path: Path, data):
+        if not write_started.is_set():
+            write_started.set()
+            time.sleep(0.05)
+        original_write(path, data)
+
+    system._write_json_file = slow_write  # type: ignore[method-assign]
+
+    try:
+        first_task = asyncio.create_task(
+            system.analyze_learning_opportunities(
+                "문제를 해결했어. 아주 좋아.",
+                "도움이 되었다니 다행이야.",
+            )
+        )
+
+        await asyncio.wait_for(asyncio.to_thread(write_started.wait, 1), timeout=1.5)
+
+        tactic.metadata["note"] = "updated"
+        heuristic.source_conversations.append("conversation-2")
+
+        second_task = asyncio.create_task(
+            system.analyze_learning_opportunities(
+                "새로운 오류를 발견했지만 해결 가능해.",
+                "다음 번에는 더 빠르게 대응하겠습니다.",
+            )
+        )
+
+        results = await asyncio.gather(first_task, second_task)
+    finally:
+        system._write_json_file = original_write  # type: ignore[method-assign]
+
+    assert all(result.is_success for result in results)
+
+    tactics_data = json.loads((tmp_path / "generated_tactics.json").read_text(encoding="utf-8"))
+    heuristics_data = json.loads((tmp_path / "generated_heuristics.json").read_text(encoding="utf-8"))
+
+    assert any(entry.get("metadata", {}).get("note") == "updated" for entry in tactics_data)
+    assert any("conversation-2" in entry.get("source_conversations", []) for entry in heuristics_data)
+
+
+def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
+    system = AutoLearningSystem(
+        database=_StubDatabase(),
+        conversation_memory=_StubConversationMemory(),
+        storage_path=str(tmp_path),
+        enable_korean_nlp=False,
+    )
+
+    async def trigger_save() -> None:
+        await system._save_learning_data()
+
+    asyncio.run(trigger_save())
+
+    for artifact in (
+        "learning_points.json",
+        "generated_tactics.json",
+        "generated_heuristics.json",
+        "learning_metrics.json",
+    ):
+        assert (tmp_path / artifact).exists(), f"{artifact} should be persisted without an active loop at init"

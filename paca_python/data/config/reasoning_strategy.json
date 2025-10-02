@@ -62,9 +62,21 @@
         "reasoning_types": ["abductive", "analogical"],
         "max_attempts": 2
       },
+      "validation_issue_limit": {
+        "reasoning_types": ["inductive", "causal"],
+        "max_attempts": 2
+      },
+      "confidence_collapse": {
+        "reasoning_types": ["analogical"],
+        "max_attempts": 1
+      },
       "backtrack_failure_limit": {
         "reasoning_types": ["inductive"],
         "max_attempts": 1
+      },
+      "quality_alert_red": {
+        "reasoning_types": ["deductive", "causal"],
+        "max_attempts": 2
       },
       "default": {
         "reasoning_types": ["deductive"],
