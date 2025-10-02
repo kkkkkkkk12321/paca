@@ -5,6 +5,7 @@ TypeScript 버전의 Python 완전 변환 + 한국어 NLP 최적화
 """
 
 import asyncio
+import copy
 import json
 import time
 import logging
@@ -81,6 +82,9 @@ class AutoLearningSystem:
 
         # 학습 패턴 정의 (한국어 최적화)
         self.learning_patterns = self._initialize_korean_patterns()
+
+        # 저장 동기화 락
+        self._save_lock = asyncio.Lock()
 
         # 데이터 로드
         self._load_learning_data()
@@ -659,39 +663,38 @@ class AutoLearningSystem:
 
     async def _save_learning_data(self) -> None:
         """학습 데이터 저장"""
-        try:
-            learning_points_file = self.storage_path / "learning_points.json"
-            learning_points_data = [
-                {
-                    **lp.__dict__,
-                    "category": lp.category.value,
-                    "created_at": lp.created_at,
-                    "updated_at": lp.updated_at
-                }
-                for lp in self.learning_points
-            ]
+        async with self._save_lock:
+            try:
+                learning_points_file = self.storage_path / "learning_points.json"
+                learning_points_data = []
+                for lp in self.learning_points:
+                    lp_snapshot = copy.deepcopy(lp.__dict__)
+                    lp_snapshot["category"] = lp.category.value
+                    lp_snapshot["created_at"] = lp.created_at
+                    lp_snapshot["updated_at"] = lp.updated_at
+                    learning_points_data.append(lp_snapshot)
 
-            tactics_file = self.storage_path / "generated_tactics.json"
-            tactics_data = [tactic.__dict__ for tactic in self.generated_tactics]
+                tactics_file = self.storage_path / "generated_tactics.json"
+                tactics_data = [copy.deepcopy(tactic.__dict__) for tactic in self.generated_tactics]
 
-            heuristics_file = self.storage_path / "generated_heuristics.json"
-            heuristics_data = [heuristic.__dict__ for heuristic in self.generated_heuristics]
+                heuristics_file = self.storage_path / "generated_heuristics.json"
+                heuristics_data = [copy.deepcopy(heuristic.__dict__) for heuristic in self.generated_heuristics]
 
-            metrics_file = self.storage_path / "learning_metrics.json"
-            metrics_data = dict(self.metrics.__dict__)
+                metrics_file = self.storage_path / "learning_metrics.json"
+                metrics_data = copy.deepcopy(self.metrics.__dict__)
 
-            artifacts: List[Tuple[Path, Any]] = [
-                (learning_points_file, learning_points_data),
-                (tactics_file, tactics_data),
-                (heuristics_file, heuristics_data),
-                (metrics_file, metrics_data),
-            ]
+                artifacts: List[Tuple[Path, Any]] = [
+                    (learning_points_file, learning_points_data),
+                    (tactics_file, tactics_data),
+                    (heuristics_file, heuristics_data),
+                    (metrics_file, metrics_data),
+                ]
 
-            for path, data in artifacts:
-                await self._write_json_artifact(path, data)
+                for path, data in artifacts:
+                    await self._write_json_artifact(path, data)
 
-        except Exception as e:
-            logger.error(f"Failed to save learning data: {str(e)}")
+            except Exception as e:
+                logger.error(f"Failed to save learning data: {str(e)}")
 
     async def _write_json_artifact(self, path: Path, data: Any) -> None:
         """비동기적으로 JSON 아티팩트를 저장"""
