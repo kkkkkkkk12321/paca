@@ -5,6 +5,7 @@ Config Base Module
 
 import json
 import os
+import re
 import yaml
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -14,6 +15,40 @@ from typing import Any, Dict, List, Optional, Union
 
 from ..core.types.base import ID, KeyValuePair, Result
 from ..core.errors.base import ConfigurationError, ValidationError
+
+
+DEFAULT_GEMINI_KEY_PLACEHOLDERS: List[str] = [
+    "<<SET_GEMINI_API_KEY_1>>",
+    "<<SET_GEMINI_API_KEY_2>>",
+    "<<SET_GEMINI_API_KEY_3>>",
+]
+
+_API_KEY_RE = re.compile(r"^AIza[0-9A-Za-z_-]{35}$")
+
+
+def _normalize_gemini_keys(raw_keys: Optional[List[str]]) -> List[str]:
+    sanitized: List[str] = []
+    for key in raw_keys or []:
+        key = (key or "").strip()
+        if not key:
+            continue
+        sanitized.append(key)
+
+    if not sanitized:
+        return list(DEFAULT_GEMINI_KEY_PLACEHOLDERS)
+    return sanitized
+
+
+def _redact_keys(keys: List[str]) -> List[str]:
+    redacted: List[str] = []
+    for key in keys:
+        if key in DEFAULT_GEMINI_KEY_PLACEHOLDERS:
+            redacted.append(key)
+        elif len(key) <= 8:
+            redacted.append("***")
+        else:
+            redacted.append(f"{key[:4]}...{key[-4:]}")
+    return redacted
 
 
 class ConfigFormat(Enum):
@@ -277,11 +312,7 @@ class ConfigManager:
                             "gemini-2.0-flash-preview-image-generation"
                         ]
                     },
-                    "api_keys": [
-                        "AIzaSyBNsviO1QfFcqKfeqVdvUzIk6bQ2McCk00",
-                        "AIzaSyDxipPbvDUBQZlLucC8yTqLEc9D-HnqhLw",
-                        "AIzaSyBhYUTppmklAYspJgK81w57BbEMgan7YkQ"
-                    ],
+                    "api_keys": list(DEFAULT_GEMINI_KEY_PLACEHOLDERS),
                     "rotation": {
                         "strategy": "round_robin",
                         "min_interval_seconds": 1.0
@@ -319,8 +350,23 @@ class ConfigManager:
             # 4) llm 모델/키가 비면 기본값 보강
             if not self.config["llm"].get("models"):
                 self.config["llm"]["models"] = default_config["llm"]["models"]
-            if not self.config["llm"].get("api_keys"):
-                self.config["llm"]["api_keys"] = default_config["llm"]["api_keys"]
+
+            normalized_keys = _normalize_gemini_keys(list(self.config["llm"].get("api_keys", [])))
+            self.config["llm"]["api_keys"] = normalized_keys
+            self.config["llm"]["api_keys_redacted"] = _redact_keys(normalized_keys)
+            self.config["llm"]["contains_placeholder_keys"] = all(
+                key in DEFAULT_GEMINI_KEY_PLACEHOLDERS for key in normalized_keys
+            )
+            self.config["llm"]["contains_real_keys"] = any(
+                _API_KEY_RE.match(key) and key not in DEFAULT_GEMINI_KEY_PLACEHOLDERS
+                for key in normalized_keys
+            )
+
+            if "default" in self.configs:
+                self.configs["default"]["llm"]["api_keys"] = list(normalized_keys)
+                self.configs["default"]["llm"]["api_keys_redacted"] = list(
+                    self.config["llm"]["api_keys_redacted"]
+                )
             # === [핵심 패치 끝] ===
 
             self._is_initialized = True

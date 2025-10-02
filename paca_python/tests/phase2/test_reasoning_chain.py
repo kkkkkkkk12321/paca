@@ -7,7 +7,7 @@ from paca.cognitive.reasoning_chain import (
 )
 from paca.cognitive.complexity_detector import DomainType
 from paca.core.types import Result
-from paca.reasoning.base import ReasoningResult as EngineReasoningResult
+from paca.reasoning.base import ReasoningResult as EngineReasoningResult, ReasoningType
 
 
 class _StubReasoningEngine:
@@ -25,6 +25,17 @@ class _StubReasoningEngine:
             metadata={}
         )
         return Result.success(outcome)
+
+
+class _TrackingReasoningEngine(_StubReasoningEngine):
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    async def reason(self, reasoning_type, premises, target_conclusion=None, **kwargs):
+        label = reasoning_type.value if isinstance(reasoning_type, ReasoningType) else str(reasoning_type)
+        self.calls.append(label)
+        return await super().reason(reasoning_type, premises, target_conclusion=target_conclusion, **kwargs)
 
 
 @pytest.mark.asyncio
@@ -161,7 +172,12 @@ async def test_strategy_fallback_triggers_when_recovery_fails():
     assert result.strategy_used != ReasoningStrategy.PARALLEL
     assert len(history) >= 2
     assert history[0]["strategy"] == ReasoningStrategy.PARALLEL.value
-    assert history[0]["unresolved_validation"] is True
+    collab_attempts = result.quality_assessment.get("collaboration_attempts", [])
+    if collab_attempts:
+        assert history[0]["unresolved_validation"] is False
+        assert any(entry["status"] == "collaboration_success" for entry in collab_attempts)
+    else:
+        assert history[0]["unresolved_validation"] is True
     assert any(entry["strategy"] == ReasoningStrategy.HIERARCHICAL.value for entry in history[1:])
 
 
@@ -192,9 +208,54 @@ async def test_reasoning_engine_escalation_records_additional_attempt():
     )
 
     history = result.quality_assessment.get("strategy_history", [])
-    assert any(entry["strategy"] == "reasoning_engine" for entry in history)
-    assert result.quality_assessment.get("reasoning_engine")
+    collab_attempts = result.quality_assessment.get("collaboration_attempts", [])
+    assert collab_attempts or any(entry["strategy"] == "reasoning_engine" for entry in history)
+    if collab_attempts:
+        assert any(entry["status"] in {"collaboration_success", "collaboration_failed"} for entry in collab_attempts)
+    else:
+        assert result.quality_assessment.get("reasoning_engine")
     assert result.confidence_score >= 0.85
+
+
+@pytest.mark.asyncio
+async def test_collaboration_policy_retries_on_backtrack_failure():
+    tracking_engine = _TrackingReasoningEngine()
+    chain = ReasoningChain({
+        "enable_backtracking": True,
+        "force_validation_failure": True,
+        "max_backtrack_attempts": 1,
+        "strategy_fallback_order": [ReasoningStrategy.SEQUENTIAL.value],
+        "max_strategy_attempts": 1,
+        "escalation": {
+            "enabled": True,
+            "after_attempts": 1,
+            "min_confidence": 0.8,
+            "trigger_reasons": ["forced_validation_failure"],
+            "collaboration_policy": {
+                "forced_validation_failure": {
+                    "reasoning_types": ["abductive", "analogical"],
+                    "max_attempts": 2
+                },
+                "default": {
+                    "reasoning_types": ["deductive"],
+                    "max_attempts": 1
+                }
+            }
+        }
+    }, reasoning_engine=tracking_engine)
+
+    result = await chain.execute_reasoning_chain(
+        "검증 단계가 반복해서 실패하는 경우 어떻게 복구할 수 있을까?",
+        complexity_score=75,
+        context={"domain": DomainType.TECHNICAL},
+    )
+
+    collab_attempts = result.quality_assessment.get("collaboration_attempts", [])
+    assert collab_attempts, "협업 재시도 기록이 품질 평가에 포함되어야 합니다"
+    assert any(entry["status"] == "collaboration_success" for entry in collab_attempts)
+    assert result.quality_assessment.get("unresolved_validation") is False
+    assert tracking_engine.calls, "ReasoningEngine이 협업 재시도 동안 호출되어야 합니다"
+    assert any(call in {"abductive", "analogical", "deductive"} for call in tracking_engine.calls)
 
 
 @pytest.mark.asyncio
