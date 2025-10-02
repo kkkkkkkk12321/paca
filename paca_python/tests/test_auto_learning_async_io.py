@@ -184,6 +184,21 @@ def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
         assert (tmp_path / artifact).exists(), f"{artifact} should be persisted without an active loop at init"
 
 
+def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path):
+    system = AutoLearningSystem(
+        database=_StubDatabase(),
+        conversation_memory=_StubConversationMemory(),
+        storage_path=str(tmp_path),
+        enable_korean_nlp=False,
+    )
+
+    for _ in range(2):
+        asyncio.run(system._save_learning_data())
+
+    monitoring_snapshot = tmp_path / "monitoring" / "learning_snapshot.json"
+    assert monitoring_snapshot.exists(), "default synchronizer should persist snapshot across event loops"
+
+
 def test_file_learning_data_synchronizer_initializes_without_event_loop(tmp_path: Path):
     synchronizer = FileLearningDataSynchronizer(tmp_path / "snapshot.json")
     snapshot = LearningDataSnapshot(
