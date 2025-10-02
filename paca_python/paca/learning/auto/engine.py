@@ -659,7 +659,6 @@ class AutoLearningSystem:
     async def _save_learning_data(self) -> None:
         """학습 데이터 저장"""
         try:
-            # 학습 포인트 저장
             learning_points_file = self.storage_path / "learning_points.json"
             learning_points_data = [
                 {
@@ -671,30 +670,37 @@ class AutoLearningSystem:
                 for lp in self.learning_points
             ]
 
-            with open(learning_points_file, 'w', encoding='utf-8') as f:
-                json.dump(learning_points_data, f, ensure_ascii=False, indent=2)
-
-            # 전술 저장
             tactics_file = self.storage_path / "generated_tactics.json"
             tactics_data = [tactic.__dict__ for tactic in self.generated_tactics]
 
-            with open(tactics_file, 'w', encoding='utf-8') as f:
-                json.dump(tactics_data, f, ensure_ascii=False, indent=2)
-
-            # 휴리스틱 저장
             heuristics_file = self.storage_path / "generated_heuristics.json"
             heuristics_data = [heuristic.__dict__ for heuristic in self.generated_heuristics]
 
-            with open(heuristics_file, 'w', encoding='utf-8') as f:
-                json.dump(heuristics_data, f, ensure_ascii=False, indent=2)
-
-            # 메트릭 저장
             metrics_file = self.storage_path / "learning_metrics.json"
-            with open(metrics_file, 'w', encoding='utf-8') as f:
-                json.dump(self.metrics.__dict__, f, ensure_ascii=False, indent=2)
+            metrics_data = dict(self.metrics.__dict__)
+
+            artifacts: List[Tuple[Path, Any]] = [
+                (learning_points_file, learning_points_data),
+                (tactics_file, tactics_data),
+                (heuristics_file, heuristics_data),
+                (metrics_file, metrics_data),
+            ]
+
+            for path, data in artifacts:
+                await self._write_json_artifact(path, data)
 
         except Exception as e:
             logger.error(f"Failed to save learning data: {str(e)}")
+
+    async def _write_json_artifact(self, path: Path, data: Any) -> None:
+        """비동기적으로 JSON 아티팩트를 저장"""
+        await asyncio.to_thread(self._write_json_file, path, data)
+
+    @staticmethod
+    def _write_json_file(path: Path, data: Any) -> None:
+        """JSON 데이터를 파일로 저장"""
+        serialized = json.dumps(data, ensure_ascii=False, indent=2)
+        path.write_text(serialized, encoding='utf-8')
 
     def _load_learning_data(self) -> None:
         """학습 데이터 로드"""
