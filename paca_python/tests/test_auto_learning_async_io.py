@@ -20,6 +20,7 @@ from paca.learning.auto.types import (
 )
 
 
+
 class _StubDatabase:
     def __init__(self) -> None:
         self.experiences = []
@@ -161,6 +162,7 @@ async def test_concurrent_saves_capture_mutations(tmp_path: Path):
 
 
 def test_auto_learning_system_initializes_without_event_loop(tmp_path: Path):
+
     system = AutoLearningSystem(
         database=_StubDatabase(),
         conversation_memory=_StubConversationMemory(),
@@ -222,3 +224,4 @@ async def test_learning_snapshot_synchronizer_receives_data(tmp_path: Path):
     assert monitoring_snapshot.exists()
     exported = json.loads(monitoring_snapshot.read_text(encoding="utf-8"))
     assert exported["learning_points"], "default synchronizer should persist data for monitoring"
+
