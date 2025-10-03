@@ -69,11 +69,15 @@ class OpsMonitoringBridge:
                 lock = self._write_lock
                 lock_loop = self._write_lock_loop
                 if _needs_new_lock(lock, lock_loop, current_loop):
-                    lock = asyncio.Lock()
-                    self._write_lock = lock
-                    self._write_lock_loop = current_loop
+                    lock = self._create_write_lock(current_loop)
 
         assert lock is not None  # narrow Optional for type-checkers
+        return lock
+
+    def _create_write_lock(self, loop: asyncio.AbstractEventLoop) -> asyncio.Lock:
+        lock = asyncio.Lock()
+        self._write_lock = lock
+        self._write_lock_loop = loop
         return lock
 
 
