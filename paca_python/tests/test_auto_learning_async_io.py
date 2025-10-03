@@ -207,6 +207,7 @@ def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path
 
     locks = []
     loops = []
+    observed_closed_states = []
 
     for _ in range(3):
         asyncio.run(system._save_learning_data())
@@ -216,7 +217,7 @@ def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path
         assert synchronizer._lock_loop is not None
         locks.append(synchronizer._lock)
         loops.append(synchronizer._lock_loop)
-        assert synchronizer._lock_loop.is_closed(), "asyncio.run should close each event loop"
+        observed_closed_states.append(synchronizer._lock_loop.is_closed())
 
     monitoring_snapshot = tmp_path / "monitoring" / "learning_snapshot.json"
     assert monitoring_snapshot.exists(), "default synchronizer should persist snapshot across event loops"
@@ -226,6 +227,7 @@ def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path
     assert all(
         loops[i] is not loops[i + 1] for i in range(len(loops) - 1)
     ), "each asyncio.run call should rotate synchronizer loop references"
+    assert all(observed_closed_states), "event loops created by asyncio.run should be closed"
 
 
 def test_file_learning_data_synchronizer_initializes_without_event_loop(tmp_path: Path):

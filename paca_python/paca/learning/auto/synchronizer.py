@@ -68,11 +68,15 @@ class FileLearningDataSynchronizer:
                 lock = self._lock
                 lock_loop = self._lock_loop
                 if _needs_new_lock(lock, lock_loop, current_loop):
-                    lock = asyncio.Lock()
-                    self._lock = lock
-                    self._lock_loop = current_loop
+                    lock = self._create_lock(current_loop)
 
         assert lock is not None
+        return lock
+
+    def _create_lock(self, loop: asyncio.AbstractEventLoop) -> asyncio.Lock:
+        lock = asyncio.Lock()
+        self._lock = lock
+        self._lock_loop = loop
         return lock
 
 
