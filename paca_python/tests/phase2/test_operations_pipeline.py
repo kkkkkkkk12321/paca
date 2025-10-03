@@ -144,6 +144,7 @@ def test_ops_monitoring_bridge_survives_multiple_asyncio_run_calls(tmp_path: Pat
     )
 
     locks = []
+    loops = []
     observed_closed_states = []
 
     for _ in range(3):
@@ -151,6 +152,7 @@ def test_ops_monitoring_bridge_survives_multiple_asyncio_run_calls(tmp_path: Pat
         assert bridge._write_lock is not None
         assert bridge._write_lock_loop is not None
         locks.append(bridge._write_lock)
+        loops.append(bridge._write_lock_loop)
         observed_closed_states.append(bridge._write_lock_loop.is_closed())
 
     payload = json.loads((tmp_path / "ops.json").read_text(encoding="utf-8"))
@@ -158,6 +160,9 @@ def test_ops_monitoring_bridge_survives_multiple_asyncio_run_calls(tmp_path: Pat
     assert all(
         locks[i] is not locks[i + 1] for i in range(len(locks) - 1)
     ), "new asyncio loops should trigger new lock objects"
+    assert all(
+        loops[i] is not loops[i + 1] for i in range(len(loops) - 1)
+    ), "each asyncio.run call should attach a new loop reference"
     assert all(observed_closed_states), "each event loop should be closed after asyncio.run"
 
 
