@@ -4,12 +4,25 @@ import threading
 import time
 from pathlib import Path
 import sys
+import types
 
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+if "email_validator" not in sys.modules:  # pragma: no cover - dependency shim for tests
+    class _EmailNotValidError(Exception):
+        ...
+
+    def _validate_email(email, *_args, **_kwargs):
+        return types.SimpleNamespace(email=email)
+
+    sys.modules["email_validator"] = types.SimpleNamespace(
+        EmailNotValidError=_EmailNotValidError,
+        validate_email=_validate_email,
+    )
 
 from paca.learning.auto.engine import AutoLearningSystem
 from paca.learning.auto.synchronizer import FileLearningDataSynchronizer, LearningDataSnapshot
@@ -233,11 +246,20 @@ def test_file_learning_data_synchronizer_survives_multiple_asyncio_run_calls(tmp
         metrics={},
     )
 
-    for _ in range(2):
+    lock_ids = []
+    observed_closed_states = []
+
+    for _ in range(3):
         asyncio.run(synchronizer.sync(snapshot))
+        assert synchronizer._lock is not None
+        assert synchronizer._lock_loop is not None
+        lock_ids.append(id(synchronizer._lock))
+        observed_closed_states.append(synchronizer._lock_loop.is_closed())
 
     payload = json.loads((tmp_path / "snapshot.json").read_text(encoding="utf-8"))
     assert payload["learning_points"] == []
+    assert len(set(lock_ids)) == 3, "each asyncio.run call should recreate the lock"
+    assert all(observed_closed_states), "event loops created by asyncio.run should be closed"
 
 
 class _RecordingSynchronizer:

@@ -3,8 +3,26 @@ import json
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+import sys
+import types
 
 import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+if "email_validator" not in sys.modules:  # pragma: no cover - dependency shim for tests
+    class _EmailNotValidError(Exception):
+        ...
+
+    def _validate_email(email, *_args, **_kwargs):
+        return types.SimpleNamespace(email=email)
+
+    sys.modules["email_validator"] = types.SimpleNamespace(
+        EmailNotValidError=_EmailNotValidError,
+        validate_email=_validate_email,
+    )
 
 from paca.operations import (
     GUIRegressionResult,
