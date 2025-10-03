@@ -205,7 +205,7 @@ def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path
         enable_korean_nlp=False,
     )
 
-    lock_ids = []
+    locks = []
 
     for _ in range(3):
         asyncio.run(system._save_learning_data())
@@ -213,12 +213,14 @@ def test_auto_learning_system_survives_multiple_asyncio_run_calls(tmp_path: Path
         assert isinstance(synchronizer, FileLearningDataSynchronizer)
         assert synchronizer._lock is not None
         assert synchronizer._lock_loop is not None
-        lock_ids.append(id(synchronizer._lock))
+        locks.append(synchronizer._lock)
         assert synchronizer._lock_loop.is_closed(), "asyncio.run should close each event loop"
 
     monitoring_snapshot = tmp_path / "monitoring" / "learning_snapshot.json"
     assert monitoring_snapshot.exists(), "default synchronizer should persist snapshot across event loops"
-    assert len(set(lock_ids)) == 3, "new asyncio loops should rotate synchronizer locks"
+    assert all(
+        locks[i] is not locks[i + 1] for i in range(len(locks) - 1)
+    ), "new asyncio loops should rotate synchronizer locks"
 
 
 def test_file_learning_data_synchronizer_initializes_without_event_loop(tmp_path: Path):
@@ -246,19 +248,21 @@ def test_file_learning_data_synchronizer_survives_multiple_asyncio_run_calls(tmp
         metrics={},
     )
 
-    lock_ids = []
+    locks = []
     observed_closed_states = []
 
     for _ in range(3):
         asyncio.run(synchronizer.sync(snapshot))
         assert synchronizer._lock is not None
         assert synchronizer._lock_loop is not None
-        lock_ids.append(id(synchronizer._lock))
+        locks.append(synchronizer._lock)
         observed_closed_states.append(synchronizer._lock_loop.is_closed())
 
     payload = json.loads((tmp_path / "snapshot.json").read_text(encoding="utf-8"))
     assert payload["learning_points"] == []
-    assert len(set(lock_ids)) == 3, "each asyncio.run call should recreate the lock"
+    assert all(
+        locks[i] is not locks[i + 1] for i in range(len(locks) - 1)
+    ), "each asyncio.run call should recreate the lock"
     assert all(observed_closed_states), "event loops created by asyncio.run should be closed"
 
 
