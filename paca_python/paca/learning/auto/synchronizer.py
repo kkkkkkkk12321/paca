@@ -68,6 +68,9 @@ class FileLearningDataSynchronizer:
                 lock = self._lock
                 lock_loop = self._lock_loop
                 if _needs_new_lock(lock, lock_loop, current_loop):
+                    # Refresh the running loop reference under the guard so the
+                    # newly created lock is always bound to the active loop.
+                    current_loop = asyncio.get_running_loop()
                     lock = self._create_lock(current_loop)
 
         assert lock is not None
